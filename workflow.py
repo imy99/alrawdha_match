@@ -46,12 +46,14 @@ proc_records = pd.DataFrame(proc_sheet.get_all_records())
 if proc_records.empty:
     # raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"])
     new_records = raw_records
+    
 else:
-    raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"])
-    proc_records["Timestamp"] = pd.to_datetime(proc_records["Timestamp"])
+    raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"]).dt.strftime("%Y/%m/%d %H:%M:%S")
+    proc_records["Timestamp"] = pd.to_datetime(proc_records["Timestamp"]).dt.strftime("%Y/%m/%d %H:%M:%S")
 
     latest_proc_time = proc_records["Timestamp"].max()
     new_records = raw_records[raw_records["Timestamp"] > latest_proc_time]
+    new_records["Timestamp"] = new_records["Timestamp"].astype(str)
 
 new_records.insert(0, "Profile ID","")
 
@@ -117,7 +119,9 @@ def generate_unique_id(gender: str, existing_ids: set) -> str:
         code = f"{random.randint(0, 9999):04d}"
         profile_id = f"{gender[0]}{code}"
         if profile_id not in existing_ids:
+            print(profile_id)
             return profile_id
+    
 
 
 def create_pdf(data, user_id):
@@ -183,24 +187,24 @@ Attached is your profile PDF.
 # MAIN WORKFLOW
 # -----------------------------
 if __name__ == "__main__":
-    # Example submission data from Google Form
-
+   
+    # Generating Profile ID's
     if proc_records.empty:
         existing_ids = []
     else:
         existing_ids = proc_records['Profile ID'].to_list()
 
     for i, row in new_records.iterrows():
-        if not row["Profile ID"]:
+        if not row["Profile ID"] and not row["If updating, add Profile ID (from email)"]:
             gender = row["Gender"]
             new_id = generate_unique_id(gender, existing_ids)
-            row["Profile ID"] = new_id
+            new_records.at[i, "Profile ID"] = new_id
             existing_ids.append(new_id)
             print(row["Profile ID"])
     
+
     for index, row in new_records.iterrows():
-        data = row.to_dict()
-        process_amendments(new_records)
+        new_records = process_amendments(new_records)
 
     
 
@@ -234,4 +238,4 @@ if __name__ == "__main__":
         proc_sheet.append_rows(new_records.values.tolist())
 
 
-    print(f"Profile created and emailed to {data['Email']} with ID {user_id}")
+    # print(f"Profile created and emailed to {new_records['Email']} with ID {row["Profile ID"]}")
