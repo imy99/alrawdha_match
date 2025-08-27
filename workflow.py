@@ -1,11 +1,12 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import uuid
-from fpdf import FPDF
 import yagmail
 import pandas as pd
 import random
 
+from email_formation import intiation_email, error_email, ammendment_email
+from pdf_formation import create_pdf
 from dotenv import load_dotenv
 import os
 
@@ -44,15 +45,14 @@ proc_records = pd.DataFrame(proc_sheet.get_all_records())
 
 # Filter newer records
 if proc_records.empty:
-    # raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"])
     new_records = raw_records
     
 else:
-    raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"]).dt.strftime("%Y/%m/%d %H:%M:%S")
-    proc_records["Timestamp"] = pd.to_datetime(proc_records["Timestamp"]).dt.strftime("%Y/%m/%d %H:%M:%S")
+    raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"], dayfirst=True).dt.strftime("%d/%m/%Y %H:%M:%S")
+    proc_records["Timestamp"] = pd.to_datetime(proc_records["Timestamp"], dayfirst=True).dt.strftime("%d/%m/%Y %H:%M:%S")
 
     latest_proc_time = proc_records["Timestamp"].max()
-    new_records = raw_records[raw_records["Timestamp"] > latest_proc_time]
+    new_records = raw_records[raw_records["Timestamp"] > latest_proc_time].copy()
     new_records["Timestamp"] = new_records["Timestamp"].astype(str)
 
 new_records.insert(0, "Profile ID","")
@@ -63,47 +63,53 @@ new_records.insert(0, "Profile ID","")
 # -----------------------------
 
 
-def process_amendments(df):
+def process_amendments(proc_sheet):
     """
-    Update existing profiles with amendment rows and safely remove amendment rows
-    after merging their data into the matching Profile ID row.
+    Update existing profiles with amendment rows directly on the Google Sheet.
+    Any row with a value in "If updating, add Profile ID (from email)" will update
+    the matching Profile ID row, then the amendment row is deleted.
     """
-    import pandas as pd
-
-    # Load sheet into DataFrame
+    # Load all sheet values
+    rows = proc_sheet.get_all_values()
+    headers = rows[0]
+    
+    # Column indices
+    profile_id_col = headers.index("Profile ID")
+    update_ref_col = headers.index("If updating, add Profile ID (from email)")
+    
     rows_to_delete = []
-
-    for i, row in df.iterrows():
-        # Get amendment reference code
-        amendment_ref = row.get("If updating, add Profile ID (from email)")
+    
+    # Iterate over rows (skip header)
+    for i, row in enumerate(rows[1:], start=2):  # gspread is 1-indexed
+        amendment_ref = row[update_ref_col].strip()
         
-        if amendment_ref:  # This row is an amendment
-            # Find the existing row with Profile ID matching the reference
-            existing_index = df.index[df["Profile ID"] == amendment_ref].tolist()
+        if amendment_ref:
+            # Find matching Profile ID row
+            match_row_index = None
+            for j, r in enumerate(rows[1:], start=2):
+                if r[profile_id_col].strip() == amendment_ref:
+                    match_row_index = j
+                    break
             
-            if existing_index:
-                idx = existing_index[0]  # row index of the original profile
-
-                # ✅ Update only if amendment has non-empty values
-                for col in df.columns:
-                    if col not in ["Profile ID", amendment_ref]:
-                        if row[col]:  # only overwrite if amendment provided a value
-                            df.at[idx, col] = row[col]
-                            col_index = df.columns.get_loc(col) + 1
-                            sheet.update_cell(idx + 2, col_index, row[col])
-
-                print(f"✅ Updated Profile ID {amendment_ref} with amendment from row {i+2}")
-
-                # ✅ Only mark amendment row for deletion AFTER update
-                rows_to_delete.append(i + 2)
-
+            if match_row_index:
+                # Update matching row with non-empty values from amendment
+                for col_idx, value in enumerate(row):
+                    if col_idx != profile_id_col and col_idx != update_ref_col:
+                        if value.strip():
+                            proc_sheet.update_cell(match_row_index, col_idx + 1, value)
+                print(f"✅ Updated Profile ID {amendment_ref} from row {i}")
+                
+                # Mark amendment row for deletion
+                rows_to_delete.append(i)
             else:
-                print(f"⚠️ No matching Profile ID found for amendment row {i+2}, skipping...")
+                print(f"⚠️ No matching Profile ID found for amendment row {i}, skipping...")
 
-    # Delete amendment rows from bottom to top (avoid shifting issues)
+    # Delete amendment rows from bottom to top
     for r in sorted(rows_to_delete, reverse=True):
-        sheet.delete_rows(r)
+        proc_sheet.delete_rows(r)
         print(f"🗑️ Deleted amendment row {r}")
+
+
 
 def generate_unique_id(gender: str, existing_ids: set) -> str:
     """
@@ -124,65 +130,6 @@ def generate_unique_id(gender: str, existing_ids: set) -> str:
     
 
 
-def create_pdf(data, user_id):
-    """Create a professional PDF profile for the user"""
-    pdf = FPDF()
-    pdf.add_page()
-    
-    # Title
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 15, f"Dating Profile ID: {user_id}", ln=True, align='C')
-    pdf.ln(10)  # space after title
-
-    # Profile details
-    pdf.set_font("Arial", '', 12)
-    for key, value in data.items():
-        # Key in bold
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(50, 10, f"{key}:", ln=0)
-        # Value in normal font
-        pdf.set_font("Arial", '', 12)
-        pdf.multi_cell(0, 10, f"{value}")
-        pdf.ln(2)  # small space between rows
-
-    # Optional: add a line separator at the end
-    pdf.ln(5)
-    pdf.set_draw_color(0, 0, 0)  # black
-    pdf.set_line_width(0.5)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-
-    # Save PDF
-    filename = f"profile_{user_id}.pdf"
-    pdf.output(filename)
-    return filename
-
-    pdf.ln(5)
-
-    # Footer
-    pdf.set_font("Arial", 'I', 10)
-    pdf.cell(0, 10, "This profile is shared anonymously with Al Rawdha community for matchmaking.\n"
-                    "If you wish to amend your profile, use your Profile ID from the email.", ln=True, align='C')
-
-    # Save PDF
-    filename = f"profile_{user_id}.pdf"
-    pdf.output(filename)
-    return filename
-
-
-def send_email(to_email, user_id, pdf_file):
-    """Send email with ID and PDF attachment"""
-    yag = yagmail.SMTP(GMAIL_USER, GMAIL_APP_PASSWORD)
-    subject = "Al Rawdha Matrimonial Profile"
-    body = f"""Hello,
-
-Your unique profile ID is: {user_id}
-You can use this ID to update your profile in the future.
-
-Attached is your profile PDF.
-"""
-    yag.send(to=to_email, subject=subject, contents=body, attachments=pdf_file)
-
-
 # -----------------------------
 # MAIN WORKFLOW
 # -----------------------------
@@ -201,34 +148,38 @@ if __name__ == "__main__":
             new_records.at[i, "Profile ID"] = new_id
             existing_ids.append(new_id)
             print(row["Profile ID"])
-    
 
-    for index, row in new_records.iterrows():
-        new_records = process_amendments(new_records)
-
-    
 
     # Handle new profiles
-    for _, row in new_records.iterrows():
-        data = row.to_dict()
-        user_id = row["Profile ID"]
-        pdf_file = create_pdf(data, user_id)
-        try:
-            send_email(data["Email"], user_id, pdf_file)
-            print(f"📩 Sent NEW profile email to {data['Email']}")
-        except Exception as e:
-            print(f"Failed to send email to {data['Email']}: {e}")
+    existing_ids = set(proc_records['Profile ID']+ new_records['Profile ID'])
 
-    # Handle amended profiles
     for _, row in new_records.iterrows():
         data = row.to_dict()
         user_id = row["Profile ID"]
+        name = row['Full Name (will be kept anonymous)']
+        print(name)
         pdf_file = create_pdf(data, user_id)
-        try:
-            send_email(data["Email"], user_id, pdf_file)  # you can customize subject
-            print(f"📩 Sent AMENDMENT email to {data['Email']}")
-        except Exception as e:
-            print(f"Failed to send email to {data['Email']}: {e}")
+
+        update_ref = row.get("If updating, add Profile ID (from email)")
+
+        if update_ref in existing_ids:
+            try:
+                ammendment_email(row["Email"], name, user_id, pdf_file) 
+                print(f"📩 Sent AMENDMENT email to {data['Email']}")
+            except Exception as e:
+                print(f"Failed to send email to {row['Email']}: {e}")
+        elif update_ref not in existing_ids:
+            try:
+                error_email(row["Email"], name, user_id, pdf_file) 
+                print(f"📩 Sent Error email to {row['Email']}")
+            except Exception as e:
+                print(f"Failed to send email to {row['Email']}: {e}")
+        else:
+            try:
+                intiation_email(row["Email"], name, user_id, pdf_file)
+                print(f"📩 Sent NEW profile email to {row['Email']}")
+            except Exception as e:
+                print(f"Failed to send email to {row['Email']}: {e}")
 
     if proc_records.empty:
         # Sheet is empty → add headers + data
@@ -237,5 +188,4 @@ if __name__ == "__main__":
         # Sheet has data → append only values
         proc_sheet.append_rows(new_records.values.tolist())
 
-
-    # print(f"Profile created and emailed to {new_records['Email']} with ID {row["Profile ID"]}")
+    process_amendments(proc_sheet)
