@@ -35,7 +35,7 @@ creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, s
 client = gspread.authorize(creds)
 raw_sheet = client.open(RAW_SHEET_NAME).sheet1
 proc_sheet = client.open(PROC_SHEET_NAME).sheet1
-print("Authenticated! Read from:", raw_sheet.title, "| Write to:", proc_sheet.title)
+print("Authenticated! Read from:", RAW_SHEET_NAME.title(), "| Write to:", PROC_SHEET_NAME.title())
 
 # -----------------------------
 # GET ALL RECORDS
@@ -55,13 +55,14 @@ else:
     new_records = raw_records[raw_records["Timestamp"] > latest_proc_time].copy()
     new_records["Timestamp"] = new_records["Timestamp"].astype(str)
 
-new_records.insert(0, "Profile ID","")
+new_records.insert(1, "Profile ID","")
+new_records.columns = [col.strip() for col in new_records.columns]
+
 
 
 # -----------------------------
 # HELPER FUNCTIONS
 # -----------------------------
-
 
 def process_amendments(proc_sheet):
     """
@@ -125,7 +126,6 @@ def generate_unique_id(gender: str, existing_ids: set) -> str:
         code = f"{random.randint(0, 9999):04d}"
         profile_id = f"{gender[0]}{code}"
         if profile_id not in existing_ids:
-            print(profile_id)
             return profile_id
     
 
@@ -151,35 +151,41 @@ if __name__ == "__main__":
 
 
     # Handle new profiles
-    existing_ids = set(proc_records['Profile ID']+ new_records['Profile ID'])
+    existing_ids = set()
+
+    if not proc_records.empty:
+        existing_ids.update(proc_records['Profile ID'].dropna().tolist())
+
+    # Add IDs from new_records that might already exist
+    existing_ids.update(new_records['Profile ID'].dropna().tolist())
 
     for _, row in new_records.iterrows():
         data = row.to_dict()
         user_id = row["Profile ID"]
         name = row['Full Name (will be kept anonymous)']
-        print(name)
         pdf_file = create_pdf(data, user_id)
 
         update_ref = row.get("If updating, add Profile ID (from email)")
 
-        if update_ref in existing_ids:
+        if update_ref and update_ref in existing_ids: # if update_ref exists and the number is part of the existing_ids 
             try:
                 ammendment_email(row["Email"], name, user_id, pdf_file) 
-                print(f"📩 Sent AMENDMENT email to {data['Email']}")
+                print(f"📩 Profile {user_id}: Sent AMENDMENT email to {data['Email']}")
             except Exception as e:
-                print(f"Failed to send email to {row['Email']}: {e}")
+                print(f"Profile {user_id}: Failed to send email to {row['Email']}: {e}")
+        elif row.get('Profile ID'):        
+            try:
+                intiation_email(row["Email"], name, user_id, pdf_file)
+                print(f"📩 Profile {user_id}: Sent NEW profile email to {row['Email']}")
+            except Exception as e:
+                print(f"Profile {user_id}: Failed to send email to {row['Email']}: {e}")
         elif update_ref not in existing_ids:
             try:
                 error_email(row["Email"], name, user_id, pdf_file) 
-                print(f"📩 Sent Error email to {row['Email']}")
+                print(f"📩 Profile {user_id}: Sent ERROR email to {row['Email']}")
             except Exception as e:
-                print(f"Failed to send email to {row['Email']}: {e}")
-        else:
-            try:
-                intiation_email(row["Email"], name, user_id, pdf_file)
-                print(f"📩 Sent NEW profile email to {row['Email']}")
-            except Exception as e:
-                print(f"Failed to send email to {row['Email']}: {e}")
+                print(f"Profile {user_id}: Failed to send email to {row['Email']}: {e}")
+
 
     if proc_records.empty:
         # Sheet is empty → add headers + data
