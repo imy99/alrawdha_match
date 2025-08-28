@@ -4,3 +4,5 @@ fpdf==1.7.2
 yagmail
 pandas
 dotenv
+flake8
+black
