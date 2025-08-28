@@ -3,17 +3,18 @@ import yagmail
 from dotenv import load_dotenv
 from datetime import datetime
 
-load_dotenv() 
+load_dotenv()
 
 # Gmail credentials for sending emails (can use App Password)
 GMAIL_USER = os.getenv("GMAIL_USER")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")  # Replace with your app password
 
-def intiation_email(to_email,name, user_id, pdf_file):
+
+def intiation_email(to_email, name, user_id, pdf_file):
     """Send first-time profile creation email with PDF attachment"""
     yag = yagmail.SMTP(GMAIL_USER, GMAIL_APP_PASSWORD)
     subject = f'🎉 Welcome to Al Rawdha! Your Matrimonial Profile is Ready {datetime.now().strftime("%d/%m/%y")}'
-    
+
     body = f"""Assalamu Alaykum {name},
 
 Your Al Rawdha Matrimonial Profile has been successfully created.
@@ -30,13 +31,16 @@ Al Rawdha Community Matchmaking
 """
     yag.send(to=to_email, subject=subject, contents=body, attachments=pdf_file)
 
+
 def error_email(to_email, name, user_id, pdf_file):
     """
     Send an error email if the user entered an invalid Profile ID
     in the 'If updating, add Profile ID (from email)' field.
     """
     yag = yagmail.SMTP(GMAIL_USER, GMAIL_APP_PASSWORD)
-    subject = f'⚠️ Al Rawdha Matrimonial Profile Error {datetime.now().strftime("%d/%m/%y")}'
+    subject = (
+        f'⚠️ Al Rawdha Matrimonial Profile Error {datetime.now().strftime("%d/%m/%y")}'
+    )
     body = f"""Assalamu Alaykum {name},
 
 It looks like the Profile ID you entered in the 'If updating, add Profile ID (from email)' field
@@ -52,7 +56,8 @@ Al Rawdha Community Matrimonal Team
 """
     yag.send(to=to_email, subject=subject, contents=body, attachments=pdf_file)
 
-def ammendment_email(to_email,name, user_id, pdf_file):
+
+def ammendment_email(to_email, name, user_id, pdf_file):
     """Send email with ID and PDF attachment"""
     yag = yagmail.SMTP(GMAIL_USER, GMAIL_APP_PASSWORD)
     subject = f'📝 Al Rawdha Profile Updated Successfully {datetime.now().strftime("%d/%m/%y")}'
@@ -71,5 +76,3 @@ Warm regards,
 Al Rawdha Community Matrimonial Team
 """
     yag.send(to=to_email, subject=subject, contents=body, attachments=pdf_file)
-
-    
