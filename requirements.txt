@@ -1,6 +1,6 @@
 gspread
 oauth2client
-fpdf==1.7.2
+fpdf2
 yagmail
 pandas
 dotenv

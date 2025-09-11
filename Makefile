@@ -38,6 +38,10 @@ credentials:
 run:
 	conda run -n $(ENV_NAME) python workflow.py
 
+## Run your pdf formation python script
+pdf:
+	conda run -n $(ENV_NAME) python pdf_formation.py
+
 ## Run tests with pytest (assumes tests/ directory)
 test:
 	conda run -n $(ENV_NAME) pytest tests/
