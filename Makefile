@@ -31,7 +31,6 @@ credentials:
 	@echo ".env file and matching-service-account.json created fill in your actual credentials. For more information, see README.md."
 
 	touch .flake8
-	
 
 
 ## Run your main Python script (change main.py to your entry file)
