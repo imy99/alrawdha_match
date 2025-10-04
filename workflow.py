@@ -49,15 +49,11 @@ proc_records = pd.DataFrame(proc_sheet.get_all_records())
 
 # Filter newer records
 if proc_records.empty:
-    new_records = raw_records
+    new_records = raw_records.copy()
 
 else:
-    raw_records["Timestamp"] = pd.to_datetime(
-        raw_records["Timestamp"], dayfirst=True
-    ).dt.strftime("%d/%m/%Y %H:%M:%S")
-    proc_records["Timestamp"] = pd.to_datetime(
-        proc_records["Timestamp"], dayfirst=True
-    ).dt.strftime("%d/%m/%Y %H:%M:%S")
+    raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"], dayfirst=True)
+    proc_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"], dayfirst=True)
 
     latest_proc_time = proc_records["Timestamp"].max()
     new_records = raw_records[raw_records["Timestamp"] > latest_proc_time].copy()

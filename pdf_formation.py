@@ -1,4 +1,5 @@
 from fpdf import FPDF
+import tempfile
 import pandas as pd
 from datetime import datetime
 from fpdf.enums import XPos, YPos
@@ -89,7 +90,7 @@ def create_pdf(data, user_id):
                     pdf.set_font("helvetica", "", 8)
                     pdf.set_text_color(40, 167, 69)  # Green
                     pdf.set_xy(90, y_position + 8)
-                    pdf.cell(50, 6, "🔒 Protected", align="L")
+                    pdf.cell(50, 6, "Protected", align="L")
                 
                 y_position += 15
         
@@ -117,7 +118,7 @@ def create_pdf(data, user_id):
     pdf.set_xy(10, pdf.get_y() + 5)
     pdf.set_font("helvetica", "B", 9)
     pdf.set_text_color(40, 167, 69)
-    pdf.cell(0, 6, "✓ Profile Active", align="C")
+    pdf.cell(0, 6, " Profile Active", align="C")
     
     # Save PDF
     filename = f'data/{user_id}_{datetime.now().strftime("%d_%m_%y")}.pdf'
