@@ -25,16 +25,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Create service account file
-        run: | 
-          echo "${{ secrets.MATCHING_SERVICE_ACCOUNT }}" > matching-service-account.json
-        shell: bash
+              
+      - name: Create service account JSON file
+        run: echo '${{ secrets.MATCHING_SERVICE_ACCOUNT }}' > matching-service-account.json
 
-      - name: Run script
+      - name: Run workflow.py
         env:
-          SERVICE_ACCOUNT_FILE: ${{ secrets.SERVICE_ACCOUNT_FILE }}
+          SERVICE_ACCOUNT_FILE: matching-service-account.json
           RAW_SHEET_NAME: ${{ secrets.RAW_SHEET_NAME }}
           PROC_SHEET_NAME: ${{ secrets.PROC_SHEET_NAME }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: python workflow.py
+        run: |
+          # Debug: Check that environment variables are set
+          echo "SERVICE_ACCOUNT_FILE = $SERVICE_ACCOUNT_FILE"
+          echo "RAW_SHEET_NAME = $RAW_SHEET_NAME"
+          echo "PROC_SHEET_NAME = $PROC_SHEET_NAME"
+          ls -l matching-service-account.json
+
+          python workflow.py
