@@ -6,6 +6,7 @@ from email_formation import intiation_email, error_email, ammendment_email
 from pdf_formation import create_pdf
 from dotenv import load_dotenv
 import os
+from datetime import datetime
 
 load_dotenv()
 
@@ -53,13 +54,18 @@ if proc_records.empty:
 
 else:
     raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"], dayfirst=True)
-    proc_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"], dayfirst=True)
+    proc_records["Timestamp"] = pd.to_datetime(proc_records["Timestamp"], dayfirst=True)
+    proc_records["Amendment Timestamp"] = pd.to_datetime(proc_records["Amendment Timestamp"], dayfirst=True)
 
-    latest_proc_time = proc_records["Timestamp"].max()
+
+    latest_proc_row = proc_records[["Timestamp","Amendment Timestamp"]].max()
+    latest_proc_time = latest_proc_row.max()
+
     new_records = raw_records[raw_records["Timestamp"] > latest_proc_time].copy()
     new_records["Timestamp"] = new_records["Timestamp"].astype(str)
 
 new_records.insert(1, "Profile ID", "")
+new_records.insert(1, "Amendment Timestamp", "")
 new_records.columns = [col.strip() for col in new_records.columns]
 
 
@@ -96,14 +102,34 @@ def process_amendments(proc_sheet):
                     match_row_index = j
                     break
 
+            # Special case: If the column is "Timestamp", write to "Amendment Timestamp" instead
             if match_row_index:
-                # Update matching row with non-empty values from amendment
                 for col_idx, value in enumerate(row):
                     if col_idx != profile_id_col and col_idx != update_ref_col:
-                        if value.strip():
-                            proc_sheet.update_cell(match_row_index, col_idx + 1, value)
-                print(f"✅ Updated Profile ID {amendment_ref} from row {i}")
+                        col_name = headers[col_idx]  # ✅ Define col_name here
 
+                        if col_name == "Timestamp":
+                            amendment_timestamp_col = headers.index("Amendment Timestamp")
+                        
+                            if col_name == "Timestamp":
+                                if value.strip():
+                                    # Parse the timestamp (handles both ISO and DD/MM/YYYY formats)
+                                    try:
+                                        parsed_time = datetime.strptime(value, "%d/%m/%Y %H:%M:%S")
+                                    except ValueError:
+                                        parsed_time = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+                                        print('except')
+
+                                    # Convert to string in DD/MM/YYYY HH:MM:SS
+                                    formatted_time = parsed_time.strftime("%d/%m/%Y %H:%M:%S")
+                                    proc_sheet.update_cell(match_row_index, amendment_timestamp_col + 1, str(formatted_time))                
+
+                        if col_name not in ["Timestamp", "Amendment Timestamp", "If updating, add Profile ID (from email)"]:
+                            # Update matching row with values from amendment row
+                            proc_sheet.update_cell(match_row_index, col_idx + 1, value)
+
+                print(f"✅ Updated Profile ID {amendment_ref} from row {i}")
+    
                 # Mark amendment row for deletion
                 rows_to_delete.append(i)
             else:
@@ -194,7 +220,7 @@ if __name__ == "__main__":
                 print(f"Profile {user_id}: Failed to send email to {row['Email']}: {e}")
         elif update_ref not in existing_ids:
             try:
-                error_email(row["Email"], name, user_id, pdf_file)
+                error_email(row["Email"], name, user_id)
                 print(f"📩 Profile {user_id}: Sent ERROR email to {row['Email']}")
             except Exception as e:
                 print(f"Profile {user_id}: Failed to send email to {row['Email']}: {e}")
