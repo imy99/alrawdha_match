@@ -1,244 +1,269 @@
 from fpdf import FPDF
-import tempfile
 import pandas as pd
 from datetime import datetime
 from fpdf.enums import XPos, YPos
+import os
+
+# Al Rawdha Matrimony Color Scheme
+PRIMARY_GREEN = (46, 84, 74)      # #2E544A - Deep Green
+SECONDARY_SAND = (220, 203, 174)   # #DCCBAE - Sand
+ACCENT_OLIVE = (122, 142, 107)     # #7A8E6B - Olive
+HIGHLIGHT_CREAM = (248, 246, 240)  # #F8F6F0 - Cream
+
+def create_gradient_tags(values_str, pdf):
+    """Create color-coded tags for 'Open to matches from' field with gradient colors."""
+    if not values_str or pd.isna(values_str):
+        return
+
+    # Split values by comma
+    values = [v.strip() for v in str(values_str).split(',')]
+
+    # Define gradient colors (from Deep Green to Olive)
+    gradient_colors = [
+        (46, 84, 74),      # Deep Green
+        (65, 100, 85),     # Transitional
+        (84, 116, 96),     # Transitional
+        (103, 129, 101),   # Transitional
+        (122, 142, 107)    # Olive
+    ]
+
+    start_x = pdf.get_x()
+    start_y = pdf.get_y()
+    x_position = start_x
+    y_position = start_y
+    max_width = 170  # Maximum width before wrapping
+
+    for i, value in enumerate(values):
+        # Select color from gradient based on index
+        color_index = min(i, len(gradient_colors) - 1)
+        color = gradient_colors[color_index]
+
+        # Calculate darker color for shadow
+        shadow_color = tuple(max(0, c - 25) for c in color)
+
+        # Estimate tag width (rough calculation)
+        tag_width = len(value) * 2 + 8
+
+        # Check if we need to wrap to next line
+        if x_position + tag_width > start_x + max_width:
+            x_position = start_x
+            y_position += 11
+
+        # Draw shadow (slightly offset and darker)
+        pdf.set_fill_color(*shadow_color)
+        pdf.set_line_width(0)
+        pdf.rect(x_position + 0.5, y_position + 0.5, tag_width, 7, 'F', round_corners=True, corner_radius=1.5)
+
+        # Draw rounded rectangle for tag
+        pdf.set_fill_color(*color)
+        pdf.set_draw_color(*color)
+        pdf.set_line_width(0.3)
+        pdf.rect(x_position, y_position, tag_width, 7, 'DF', round_corners=True, corner_radius=1.5)
+
+        # Draw tag text
+        pdf.set_font("helvetica", "B", 9)
+        pdf.set_text_color(255, 255, 255)  # White text
+        pdf.set_xy(x_position + 2, y_position + 1)
+        pdf.cell(tag_width - 4, 5, value, align="C")
+
+        x_position += tag_width + 4
+
+    # Move cursor after tags
+    pdf.set_xy(start_x, y_position + 13)
 
 def create_pdf(data, user_id):
-    """Create a professional PDF profile using built-in fonts."""
+    """Create a professional Al Rawdha Matrimony PDF profile."""
     pdf = FPDF()
     pdf.add_page()
-    
-    # Header section with subtle background
-    pdf.set_fill_color(248, 249, 250)  # Very light gray background
-    pdf.rect(10, 10, 190, 30, 'F')  # Header background rectangle
-    
-    # Title
-    pdf.set_font("helvetica", "B", 18)
-    pdf.set_text_color(44, 62, 80)  # Dark blue-gray
-    pdf.set_xy(10, 20)
-    pdf.cell(190, 10, f"Dating Profile ID: {user_id}", align="C")
-    
-    # Timestamp
-    pdf.set_font("helvetica", "", 10)
-    pdf.set_text_color(108, 117, 125)  # Gray
-    pdf.set_xy(10, 32)
-    timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    pdf.cell(190, 8, f"Generated: {timestamp}", align="C")
-    
-    pdf.ln(25)
-    
-    # Reset text color for content
-    pdf.set_text_color(33, 37, 41)  # Dark gray
-    
-    # Define sections
-    sections = {
-        "Personal Information": ["Profile ID", "Full Name (will be kept anonymous)", "Gender", "Date of Birth", "Ethnic Background"],
-        "Contact Information": ["Email", "Phone number (will be kept anonymous)"],
-        "Location & Status": ["City of Residence", "Nationality / Immigration Status"]
-    }
-    
-    y_position = pdf.get_y() + 10
-    
-    for section_title, fields in sections.items():
-        # Section header
-        pdf.set_xy(10, y_position)
-        pdf.set_font("helvetica", "B", 14)
-        pdf.set_text_color(52, 73, 94)  # Darker blue-gray
-        pdf.cell(0, 12, section_title)
-        y_position += 18
-        
-        # Section content box
-        section_height = len([field for field in fields if field in data]) * 15 + 10
-        pdf.set_fill_color(253, 253, 253)  # Very light gray
-        pdf.rect(15, y_position - 5, 180, section_height, 'F')
-        
-        # Draw left border for section
-        pdf.set_draw_color(108, 117, 125)
-        pdf.set_line_width(2)
-        pdf.line(15, y_position - 5, 15, y_position - 5 + section_height)
-        
-        # Section fields
-        for field in fields:
-            if field in data and pd.notna(data[field]) and str(data[field]).strip() != '':
-                pdf.set_xy(25, y_position)
-                
-                # Field label
-                pdf.set_font("helvetica", "B", 11)
-                pdf.set_text_color(73, 80, 87)  # Medium gray
-                
-                # Clean up field names
-                display_field = field.replace("(will be kept anonymous)", "").strip()
-                pdf.cell(60, 10, f"{display_field}:")
-                
-                # Field value
+
+    # Header Section with Deep Green background
+    pdf.set_fill_color(*PRIMARY_GREEN)
+    pdf.rect(0, 0, 210, 50, 'F')
+
+    # Title: Al Rawdha Matrimony
+    pdf.set_font("helvetica", "B", 24)
+    pdf.set_text_color(255, 255, 255)  # White text
+    pdf.set_xy(15, 18)
+    pdf.cell(130, 12, "Al Rawdha Matrimony", align="L")
+
+    # Subheading: Profile ID
+    pdf.set_font("helvetica", "", 14)
+    pdf.set_text_color(*HIGHLIGHT_CREAM)
+    pdf.set_xy(15, 32)
+    pdf.cell(130, 8, f"Profile ID: {user_id}", align="L")
+
+    # Add logo in top right corner AFTER header background (so it's visible)
+    logo_path = 'logo.jpg'
+    if os.path.exists(logo_path):
+        try:
+            # Position logo in top right with better sizing
+            pdf.image(logo_path, x=155, y=10, w=40)
+        except Exception as e:
+            print(f"Warning: Could not add logo - {e}")
+
+    # Start content area
+    pdf.set_y(60)
+
+    # Define question order and display (ONLY public matchmaking information)
+    # Excluded: Private/anonymous info (name, contact details, timestamps, representative info)
+    questions = [
+        ("Self Summary", "Self Summary"),
+        ("Marriage Status", "Marriage Status"),
+        ("Do you have children?", "Do you have children?"),
+        ("Dress", "Dress"),
+        ("Islamic Scholars and Speakers", "Islamic Scholars and Speakers"),
+        ("Work and Education", "Work and Education"),
+        ("Hobbies, Family and Lifestyle", "Hobbies, Family and Lifestyle"),
+        ("My Islam (in detail)", "My Islam"),
+        ("Ethnic Background", "Ethnic Background"),
+        ("City of Residence", "City of Residence"),
+        ("Nationality / Immigration Status", "Nationality / Immigration Status"),
+        ("Height", "Height"),
+        ("__SECTION__", "Preferences & Compatibility Details"),  # Section divider
+        ("Preferred Ethnic Background", "Preferred Ethnic Background"),
+        ("I'm looking for ...", "I'm looking for"),
+        ("Preferred Age Range", "Preferred Age Range"),
+        ("Open to matches from", "Open to matches from")
+    ]
+
+    # Set initial position
+    y_position = 65
+    left_margin = 25
+
+    for field_key, display_name in questions:
+        # Handle section dividers
+        if field_key == "__SECTION__":
+            # Check if we have enough space for the section (need at least 60mm for section + some content)
+            if y_position > 187:  # 247mm - 60mm needed space
+                # Start new page for Preferences section
+                pdf.add_page()
+
+                # Add header to new page
+                pdf.set_fill_color(*PRIMARY_GREEN)
+                pdf.rect(0, 0, 210, 50, 'F')
+
+                # Add logo on new page
+                if os.path.exists('logo.jpg'):
+                    try:
+                        pdf.image('logo.jpg', x=155, y=10, w=40)
+                    except:
+                        pass
+
+                pdf.set_font("helvetica", "B", 16)
+                pdf.set_text_color(255, 255, 255)
+                pdf.set_xy(15, 20)
+                pdf.cell(130, 10, f"Profile ID: {user_id}", align="L")
+
+                y_position = 65
+            else:
+                # Add extra spacing before section on same page
+                y_position += 20
+
+            # Draw section subtitle
+            pdf.set_xy(left_margin, y_position)
+            pdf.set_font("helvetica", "B", 18)
+            pdf.set_text_color(*PRIMARY_GREEN)
+            pdf.cell(0, 10, display_name, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+            # Add decorative line under subtitle
+            y_position += 10
+            pdf.set_draw_color(*ACCENT_OLIVE)
+            pdf.set_line_width(1)
+            pdf.line(left_margin, y_position, 185, y_position)
+            y_position += 15
+            continue
+
+        # Check if field exists and has value
+        if field_key in data and pd.notna(data[field_key]) and str(data[field_key]).strip() != '':
+            value = str(data[field_key]).strip()
+
+            # Estimate space needed for this field (question + answer + spacing)
+            # Rough estimate: 8 (question) + estimated answer height + 10 (spacing) + 5 (separator)
+            estimated_lines = max(1, len(str(value)) // 95)  # Approximate lines for answer
+            estimated_height = 8 + (estimated_lines * 6) + 15
+
+            # Check if we need a new page (leave 50mm for footer)
+            if y_position + estimated_height > 247:  # 297mm page - 50mm footer space
+                pdf.add_page()
+                # Add header to new page
+                pdf.set_fill_color(*PRIMARY_GREEN)
+                pdf.rect(0, 0, 210, 50, 'F')
+                pdf.set_font("helvetica", "B", 16)
+                pdf.set_text_color(255, 255, 255)
+                pdf.set_xy(15, 20)
+                pdf.cell(130, 10, f"Profile ID: {user_id} (continued)", align="L")
+                y_position = 60
+
+            # Question Label (Bold, larger, Deep Green)
+            pdf.set_xy(left_margin, y_position)
+            pdf.set_font("helvetica", "B", 13)
+            pdf.set_text_color(*PRIMARY_GREEN)
+
+            # Clean display name (remove anonymous tags for display)
+            clean_display = display_name.replace("(will be kept anonymous)", "").strip()
+            pdf.cell(0, 8, clean_display, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+            y_position += 8
+
+            # Special handling for "Open to matches from" with gradient tags
+            if field_key == "Open to matches from":
+                pdf.set_xy(left_margin + 5, y_position)
+                create_gradient_tags(value, pdf)
+                y_position = pdf.get_y() + 8
+            else:
+                # Answer (Regular, Olive color)
+                pdf.set_xy(left_margin + 5, y_position)
                 pdf.set_font("helvetica", "", 11)
-                pdf.set_text_color(33, 37, 41)  # Dark gray
-                
-                value_str = str(data[field]).encode("latin-1", "replace").decode("latin-1")
-                # Handle long text
-                if len(value_str) > 40:
-                    pdf.set_xy(90, y_position)
-                    pdf.multi_cell(100, 10, value_str)
-                    y_position += max(10, (len(value_str) // 40) * 10)
-                else:
-                    pdf.set_xy(90, y_position)
-                    pdf.cell(100, 10, value_str)
-                
-                # Add privacy indicator for sensitive fields
-                if "anonymous" in field.lower():
-                    pdf.set_font("helvetica", "", 8)
-                    pdf.set_text_color(40, 167, 69)  # Green
-                    pdf.set_xy(90, y_position + 8)
-                    pdf.cell(50, 6, "Protected", align="L")
-                
-                y_position += 15
-        
-        y_position += 20  # Space between sections
-    
-    # Footer section
-    pdf.set_y(-50)  # Position from bottom
-    
-    # Footer background
-    pdf.set_fill_color(248, 249, 250)
-    pdf.rect(10, pdf.get_y() - 5, 190, 35, 'F')
-    
+                pdf.set_text_color(*ACCENT_OLIVE)
+
+                # Use multi_cell for text wrapping with proper width
+                available_width = 160
+
+                # Encode for Latin-1 compatibility
+                value_encoded = value.encode("latin-1", "replace").decode("latin-1")
+
+                # Calculate approximate height needed
+                lines_needed = len(value_encoded) // 60 + 1
+
+                pdf.multi_cell(available_width, 6, value_encoded, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+                # Update y_position based on actual content height
+                y_position = pdf.get_y() + 2
+
+            # Add spacing between questions
+            y_position += 10
+
+            # Draw subtle separator line (Sand color)
+            pdf.set_draw_color(*SECONDARY_SAND)
+            pdf.set_line_width(0.5)
+            pdf.line(left_margin, y_position - 5, 185, y_position - 5)
+
+    # Footer Section
+    pdf.set_y(-35)
+
+    # Footer background (Sand color)
+    pdf.set_fill_color(*SECONDARY_SAND)
+    pdf.rect(0, pdf.get_y() - 5, 210, 40, 'F')
+
     # Footer text
-    pdf.set_font("helvetica", "", 10)
-    pdf.set_text_color(108, 117, 125)
+    pdf.set_font("helvetica", "", 9)
+    pdf.set_text_color(*PRIMARY_GREEN)
+    pdf.set_xy(20, pdf.get_y())
     pdf.multi_cell(
-        0, 6,
-        "This profile is shared anonymously with Al Rawdha community for matchmaking.\n"
-        "Your personal information is protected and will remain confidential.\n"
-        "To update your profile, use your Profile ID from the email.",
+        170, 5,
+        "This profile is shared confidentially with the Al Rawdha Matrimony community.\n"
+        "All personal information is protected and will remain anonymous until mutual consent.\n"
+        "To update your profile, please use your Profile ID provided in the email.",
         align="C"
     )
-    
-    # Status indicator
-    pdf.set_xy(10, pdf.get_y() + 5)
-    pdf.set_font("helvetica", "B", 9)
-    pdf.set_text_color(40, 167, 69)
-    pdf.cell(0, 6, " Profile Active", align="C")
-    
+
+
     # Save PDF
     filename = f'data/{user_id}_{datetime.now().strftime("%d_%m_%y")}.pdf'
-    pdf.output(filename)
-    return filename
 
-# Alternative version with even cleaner, minimal design
-def create_minimal_pdf(data, user_id):
-    """Create a minimal, clean PDF profile."""
-    pdf = FPDF()
-    pdf.add_page()
-    
-    # Simple header
-    pdf.set_font("helvetica", "B", 16)
-    pdf.set_text_color(33, 37, 41)
-    pdf.cell(0, 15, f"Dating Profile ID: {user_id}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
-    pdf.ln(5)
-    
-    # Timestamp
-    pdf.set_font("helvetica", "", 10)
-    pdf.set_text_color(108, 117, 125)
-    timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    pdf.cell(0, 10, timestamp, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
-    pdf.ln(10)
-    
-    # Separator line
-    pdf.set_draw_color(220, 220, 220)
-    pdf.set_line_width(0.5)
-    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
-    pdf.ln(15)
-    
-    # Profile details with clean layout
-    pdf.set_text_color(33, 37, 41)
-    
-    # Define section categories for better organization
-    personal_fields = ["Profile ID", "Full Name", "Gender", "Date of Birth", "Ethnic Background"]
-    contact_fields = ["Email", "Phone number"]
-    location_fields = ["City of Residence", "Nationality", "Immigration Status"]
-    islamic_fields = ["My Islam", "Islamic Scholars", "Dress"]
-    lifestyle_fields = ["Self Summary", "Work and Education", "Hobbies", "Family"]
-    preferences_fields = ["Preferred Ethnic Background", "I'm looking for", "Preferred Age Range", "Open to matches from"]
-    representative_fields = ["Representative's Full Name", "Representative's Number", "Representative's Email"]
-    
-    # Track current section for dividers
-    current_section = None
-    
-    for key, value in data.items():
-        if pd.notna(value) and str(value).strip() != '':
-            # Determine which section this field belongs to
-            field_section = None
-            if any(field in key for field in personal_fields):
-                field_section = "Personal Information"
-            elif any(field in key for field in contact_fields):
-                field_section = "Contact Information"
-            elif any(field in key for field in location_fields):
-                field_section = "Location & Status"
-            elif any(field in key for field in islamic_fields):
-                field_section = "Islamic Practice"
-            elif any(field in key for field in lifestyle_fields):
-                field_section = "Lifestyle & Background"
-            elif any(field in key for field in preferences_fields):
-                field_section = "Preferences"
-            elif any(field in key for field in representative_fields):
-                field_section = "Representative Information"
-            
-            # Add section divider if we've moved to a new section
-            if field_section and field_section != current_section:
-                if current_section is not None:  # Don't add divider before first section
-                    # Add subtle divider
-                    pdf.ln(8)
-                    pdf.set_draw_color(220, 220, 220)
-                    pdf.set_line_width(0.3)
-                    pdf.line(30, pdf.get_y(), 180, pdf.get_y())
-                    pdf.ln(8)
-                current_section = field_section
-            
-            # Label
-            pdf.set_font("helvetica", "B", 11)
-            pdf.set_text_color(73, 80, 87)
-            clean_key = key.replace("(will be kept anonymous)", "").strip()
-            pdf.cell(60, 12, f"{clean_key}:")
-            
-            # Value - use multi_cell for proper text wrapping
-            pdf.set_font("helvetica", "", 11)
-            pdf.set_text_color(33, 37, 41)
-            value_str = str(value).encode("latin-1", "replace").decode("latin-1")
-            
-            # Get current position and calculate available width
-            current_x = pdf.get_x()
-            current_y = pdf.get_y()
-            available_width = 190 - current_x  # Page width minus current x position
-            
-            # Use multi_cell for text wrapping
-            pdf.multi_cell(available_width, 8, value_str, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            
-            # Add subtle separator
-            if "anonymous" in key.lower():
-                pdf.set_font("helvetica", "", 8)
-                pdf.set_text_color(134, 142, 150)
-                pdf.cell(0, 6, "   (Protected)", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            
-            pdf.ln(3)
-    
-    # Footer
-    pdf.ln(10)
-    pdf.set_draw_color(220, 220, 220)
-    pdf.line(25, pdf.get_y(), 185, pdf.get_y())  # Adjusted for margins
-    pdf.ln(10)
-    
-    pdf.set_font("helvetica", "", 9)
-    pdf.set_text_color(108, 117, 125)
-    pdf.multi_cell(
-        0, 6,
-        "This profile is shared confidentially with Al Rawdha community for matchmaking purposes.\n"
-        "To update your information, please use your Profile ID.",
-        align="C"
-    )
-    
-    # Save PDF
-    filename = f'data/{user_id}_minimal_{datetime.now().strftime("%d_%m_%y")}.pdf'
+    # Create data directory if it doesn't exist
+    os.makedirs('data', exist_ok=True)
+
     pdf.output(filename)
     return filename
 
@@ -250,13 +275,11 @@ if __name__ == "__main__":
     for i, row in testing.iterrows():
         try:
             user_id = row['Profile ID']
-            
-            # Choose which version to use:
-            # create_pdf(row, user_id)          # Structured version
-            create_minimal_pdf(row, user_id)    # Minimal version
-            
-            print(f'✅ Successfully created PDF for {user_id}_{datetime.now().strftime("%d_%m_%y")}.pdf')
+
+            create_pdf(row, user_id)
+
+            print(f'Successfully created PDF for {user_id}_{datetime.now().strftime("%d_%m_%y")}.pdf')
         except Exception as e:
-            print(f"❌ Error creating PDF for {user_id}: {e}")
+            print(f"Error creating PDF for {user_id}: {e}")
 
 

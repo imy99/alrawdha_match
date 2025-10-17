@@ -54,7 +54,7 @@ If you are creating a new profile, please leave 'If updating, add Profile ID (fr
 Warm regards,
 Al Rawdha Community Matrimonal Team
 """
-    yag.send(to=to_email, subject=subject, contents=body, attachments=pdf_file)
+    yag.send(to=to_email, subject=subject, contents=body)
 
 
 def ammendment_email(to_email, name, user_id, pdf_file):
