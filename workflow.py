@@ -53,9 +53,9 @@ if proc_records.empty:
     new_records = raw_records.copy()
 
 else:
-    raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"], dayfirst=True)
-    proc_records["Timestamp"] = pd.to_datetime(proc_records["Timestamp"], dayfirst=True)
-    proc_records["Amendment Timestamp"] = pd.to_datetime(proc_records["Amendment Timestamp"], dayfirst=True)
+    raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"], format='mixed', dayfirst=True)
+    proc_records["Timestamp"] = pd.to_datetime(proc_records["Timestamp"], format='mixed', dayfirst=True)
+    proc_records["Amendment Timestamp"] = pd.to_datetime(proc_records["Amendment Timestamp"], format='mixed', dayfirst=True)
 
 
     latest_proc_row = proc_records[["Timestamp","Amendment Timestamp"]].max()
