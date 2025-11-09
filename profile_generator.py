@@ -67,6 +67,7 @@ else:
 new_records.insert(1, "Amendment Timestamp", "")
 new_records.insert(2, "Profile ID", "")
 new_records.insert(3, "Unique Match Authorisation Code", "")
+new_records.insert(4, "PDF Path", "")
 new_records.columns = [col.strip() for col in new_records.columns]
 
 
@@ -88,6 +89,7 @@ def process_amendments(proc_profile_generator):
     # Column indices
     profile_id_col = headers.index("Profile ID")
     update_ref_col = headers.index("If updating, add Profile ID (from email)")
+    pdf_path_col = headers.index("PDF Path") if "PDF Path" in headers else None
 
     rows_to_delete = []
 
@@ -125,8 +127,8 @@ def process_amendments(proc_profile_generator):
                                     formatted_time = parsed_time.strftime("%d/%m/%Y %H:%M:%S")
                                     proc_profile_generator.update_cell(match_row_index, amendment_timestamp_col + 1, str(formatted_time))                
 
-                        if col_name not in ["Timestamp", "Amendment Timestamp", "If updating, add Profile ID (from email)"]:
-                            # Update matching row with values from amendment row
+                        if col_name not in ["Timestamp", "Amendment Timestamp", "If updating, add Profile ID (from email)", "Profile ID", "Unique Match Authorisation Code"]:
+                            # Update matching row with values from amendment row (including PDF Path)
                             proc_profile_generator.update_cell(match_row_index, col_idx + 1, value)
 
                 print(f"✅ Updated Profile ID {amendment_ref} from row {i}")
@@ -212,12 +214,15 @@ if __name__ == "__main__":
     # Add IDs from new_records that might already exist
     existing_ids.update(new_records["Profile ID"].dropna().tolist())
 
-    for _, row in new_records.iterrows():
+    for i, row in new_records.iterrows():
         data = row.to_dict()
         user_id = row["Profile ID"]
         ammended_id = row["If updating, add Profile ID (from email)"]
         name = row["Full Name (will be kept anonymous)"]
         pdf_file = create_pdf(data, user_id)
+
+        # Store PDF path in the DataFrame
+        new_records.at[i, "PDF Path"] = pdf_file
 
         update_ref = row.get("If updating, add Profile ID (from email)")
 
