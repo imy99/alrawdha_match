@@ -76,3 +76,65 @@ Warm regards,
 Al Rawdha Community Matrimonial Team
 """
     yag.send(to=to_email, subject=subject, contents=body, attachments=pdf_file)
+
+
+def match_request_email(to_email, name, requester_id, pdf_file, confirmation_link):
+    """Send match request email with PDF and confirmation link"""
+    yag = yagmail.SMTP(GMAIL_USER, GMAIL_APP_PASSWORD)
+    subject = f'💞 You Have a Match Request! - Al Rawdha Matrimony {datetime.now().strftime("%d/%m/%y")}'
+
+    body = f"""Assalamu Alaikum {name},
+
+MashAllah! Someone has requested to match with you through Al Rawdha Matrimony.
+
+📋 Requester Profile ID: {requester_id}
+Please find their profile attached to this email for your review.
+
+🔗 INTERESTED? REQUEST THEM BACK:
+If you are interested in this match, please request them back by filling out this form:
+
+{confirmation_link}
+
+⏰ This link will expire in 7 days from {datetime.now().strftime("%d/%m/%Y")}
+
+💡 NOTE: A match is only confirmed when BOTH parties have requested each other. If you request them back, we will notify both of you immediately!
+
+If you are not interested, simply ignore this email and the request will expire automatically.
+
+Please review the attached profile carefully and make du'a for guidance. May Allah guide you both towards what is best.
+
+Warm regards,
+Al Rawdha Community Matrimonial Team
+"""
+    yag.send(to=to_email, subject=subject, contents=body, attachments=pdf_file)
+
+
+def mutual_match_email(to_email, name, match_id, pdf_file):
+    """Send mutual match confirmation email to both parties"""
+    yag = yagmail.SMTP(GMAIL_USER, GMAIL_APP_PASSWORD)
+    subject = f'🎉 Mutual Match Confirmed! - Al Rawdha Matrimony {datetime.now().strftime("%d/%m/%y")}'
+
+    body = f"""Assalamu Alaikum {name},
+
+Alhamdulillah! We have wonderful news!
+
+🎉 MUTUAL MATCH CONFIRMED 🎉
+
+You and Profile ID {match_id} have both expressed interest in each other. This is a mutual match!
+
+📎 Their profile is attached to this email for your reference.
+
+🤝 NEXT STEPS:
+Our matchmaking team will be in touch with both of you separately to facilitate the next steps in this process, insha'Allah.
+
+Please keep this match confidential and continue to make du'a for guidance.
+
+May Allah bless this connection and guide you both towards what is best for your deen and dunya.
+
+Warm regards,
+Al Rawdha Community Matrimonial Team
+
+---
+"And among His signs is that He created for you mates from among yourselves, that you may dwell in tranquility with them..." (Quran 30:21)
+"""
+    yag.send(to=to_email, subject=subject, contents=body, attachments=pdf_file)
