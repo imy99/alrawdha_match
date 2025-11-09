@@ -33,8 +33,7 @@ jobs:
 
         env:
           SERVICE_ACCOUNT_FILE: matching-service-account.json
-          RAW_SHEET_NAME: ${{ secrets.RAW_SHEET_NAME }}
-          PROC_SHEET_NAME: ${{ secrets.PROC_SHEET_NAME }}
+          RAW_PROFILE_GENERATOR: ${{ secrets.RAW_PROFILE_GENERATOR }}
           PROC_PROFILE_GENERATOR: ${{ secrets.PROC_PROFILE_GENERATOR }}
           RAW_MATCH_REQUEST: ${{ secrets.RAW_MATCH_REQUEST }}
           PROC_MATCH_REQUEST: ${{ secrets.PROC_MATCH_REQUEST }}
