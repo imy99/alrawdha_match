@@ -67,7 +67,8 @@ else:
 new_records.insert(1, "Amendment Timestamp", "")
 new_records.insert(2, "Profile ID", "")
 new_records.insert(3, "Unique Match Authorisation Code", "")
-new_records.insert(4, "PDF Path", "")
+new_records.insert(5, "Posted?", "No")
+new_records.insert(6, "Confirm?", "No")
 new_records.columns = [col.strip() for col in new_records.columns]
 
 
@@ -89,7 +90,7 @@ def process_amendments(proc_profile_generator):
     # Column indices
     profile_id_col = headers.index("Profile ID")
     update_ref_col = headers.index("If updating, add Profile ID (from email)")
-    pdf_path_col = headers.index("PDF Path") if "PDF Path" in headers else None
+    posted_col = headers.index("Posted?") if "Posted?" in headers else None
 
     rows_to_delete = []
 
@@ -130,6 +131,7 @@ def process_amendments(proc_profile_generator):
                         if col_name not in ["Timestamp", "Amendment Timestamp", "If updating, add Profile ID (from email)", "Profile ID", "Unique Match Authorisation Code"]:
                             # Update matching row with values from amendment row (including PDF Path)
                             proc_profile_generator.update_cell(match_row_index, col_idx + 1, value)
+                            proc_profile_generator.update_cell(match_row_index, posted_col + 1, "No")
 
                 print(f"✅ Updated Profile ID {amendment_ref} from row {i}")
     
