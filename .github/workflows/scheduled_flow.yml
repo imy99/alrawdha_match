@@ -5,7 +5,7 @@ name: scheduled_flow.yml
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    # - cron: "*/10 * * * *"
   workflow_dispatch:
 
 jobs:
