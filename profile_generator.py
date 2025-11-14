@@ -7,8 +7,24 @@ from pdf_formation import create_pdf
 from dotenv import load_dotenv
 import os
 from datetime import datetime
+import yaml
 
 load_dotenv()
+
+
+# Load config.yaml
+with open("category_names.yaml", "r") as file:
+    config = yaml.safe_load(file)
+
+# RAW_PROFILE_GENERATOR (variables)
+raw = config['2a']
+
+# AMMENDMENT_PROFILE_GENERATOR (variables)
+amm = config['2b']
+
+# PROC_PROFILE_GENERATOR (variables)
+proc = config ['3ab']
+
 
 # -----------------------------
 # CONFIGURATION
@@ -18,7 +34,9 @@ SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
 
 # Google Sheet name (linked to your Form responses)
 RAW_PROFILE_GENERATOR = os.getenv("RAW_PROFILE_GENERATOR")
+AMMENDED_PROFILE_GENERATOR  = os.getenv("AMMENDED_PROFILE_GENERATOR")
 PROC_PROFILE_GENERATOR = os.getenv("PROC_PROFILE_GENERATOR")
+
 
 # Gmail credentials for sending emails (can use App Password)
 GMAIL_USER = os.getenv("GMAIL_USER")
@@ -34,10 +52,14 @@ scope = [
 creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
 client = gspread.authorize(creds)
 raw_profile_generator = client.open(RAW_PROFILE_GENERATOR).sheet1
+amm_profile_generator = client.open(AMMENDED_PROFILE_GENERATOR).sheet1
 proc_profile_generator = client.open(PROC_PROFILE_GENERATOR).sheet1
+
 print(
     "Authenticated! Read from:",
     RAW_PROFILE_GENERATOR.title(),
+    "and",
+    AMMENDED_PROFILE_GENERATOR.title(),
     "| Write to:",
     PROC_PROFILE_GENERATOR.title(),
 )
@@ -45,30 +67,44 @@ print(
 # -----------------------------
 # GET ALL RECORDS
 # -----------------------------
-raw_records = pd.DataFrame(raw_profile_generator.get_all_records())  # returns a list of dicts
-proc_records = pd.DataFrame(proc_profile_generator.get_all_records())
+
+
+def load_sheets(sheet):
+    df = pd.DataFrame(sheet.get_all_records())
+    if df.empty:
+        headers = sheet.row_values(1)
+        df = pd.DataFrame(columns=headers)
+    return df 
+
+raw_records = load_sheets(raw_profile_generator)  # returns a list of dicts
+amm_records = load_sheets(amm_profile_generator)
+proc_records = load_sheets(proc_profile_generator)
+
 
 # Filter newer records
 if proc_records.empty:
     new_records = raw_records.copy()
 
+
 else:
-    raw_records["Timestamp"] = pd.to_datetime(raw_records["Timestamp"], format='mixed', dayfirst=True)
-    proc_records["Timestamp"] = pd.to_datetime(proc_records["Timestamp"], format='mixed', dayfirst=True)
-    proc_records["Amendment Timestamp"] = pd.to_datetime(proc_records["Amendment Timestamp"], format='mixed', dayfirst=True)
+    raw_records[raw["Timestamp"]] = pd.to_datetime(raw_records[raw["Timestamp"]], format='mixed', dayfirst=True)
+    proc_records[proc["Timestamp"]] = pd.to_datetime(proc_records[proc["Timestamp"]], format='mixed', dayfirst=True)
+    proc_records[proc["Ammended Timestamp"]] = pd.to_datetime(proc_records[proc["Ammended Timestamp"]], format='mixed', dayfirst=True)
 
 
-    latest_proc_row = proc_records[["Timestamp","Amendment Timestamp"]].max()
+    latest_proc_row = proc_records[[proc["Timestamp"],proc["Ammended Timestamp"]]].max()
     latest_proc_time = latest_proc_row.max()
 
     new_records = raw_records[raw_records["Timestamp"] > latest_proc_time].copy()
     new_records["Timestamp"] = new_records["Timestamp"].astype(str)
 
-new_records.insert(1, "Amendment Timestamp", "")
-new_records.insert(2, "Profile ID", "")
-new_records.insert(3, "Unique Match Authorisation Code", "")
-new_records.insert(5, "Posted?", "No")
-new_records.insert(6, "Confirm?", "No")
+    if not amm_records.empty:
+        amm_records[amm["Ammended Timestamp"]] = pd.to_datetime(amm_records[amm["Ammended Timestamp"]], format='mixed', dayfirst=True)
+        amm_records = amm_records[amm_records[amm["Ammended Timestamp"]] > latest_proc_time].copy()
+
+new_records.insert(1, proc["Ammended Timestamp"], "")
+new_records.insert(2, proc["Profile ID"], "")
+new_records.insert(3, proc["Profile Key"], "")
 new_records.columns = [col.strip() for col in new_records.columns]
 
 
@@ -77,88 +113,99 @@ new_records.columns = [col.strip() for col in new_records.columns]
 # -----------------------------
 
 
-def process_amendments(proc_profile_generator):
+from datetime import datetime
+
+def process_amendments(amm_records, proc_profile_generator, proc, amm):
     """
-    Update existing profiles with amendment rows directly on the Google Sheet.
-    Any row with a value in "If updating, add Profile ID (from email)" will update
-    the matching Profile ID row, then the amendment row is deleted.
+    Process amendments directly in the Google Sheet without loading into DataFrame.
+
+    (1) Keep existing PDF – Only update non-empty fields.
+    (2) Replace PDF completely – Replace all fields except:
+        proc['Profile ID'], proc['Profile Key'], proc['Timestamp'].
+
+    Updates are written directly into the sheet.
     """
-    # Load all sheet values
+
+    # Load entire sheet once
     rows = proc_profile_generator.get_all_values()
     headers = rows[0]
-
-    # Column indices
-    profile_id_col = headers.index("Profile ID")
-    update_ref_col = headers.index("If updating, add Profile ID (from email)")
-    posted_col = headers.index("Posted?") if "Posted?" in headers else None
-
-    rows_to_delete = []
-
-    # Iterate over rows (skip header)
-    for i, row in enumerate(rows[1:], start=2):  # gspread is 1-indexed
-        amendment_ref = row[update_ref_col].strip()
-
-        if amendment_ref:
-            # Find matching Profile ID row
-            match_row_index = None
-            for j, r in enumerate(rows[1:], start=2):
-                if r[profile_id_col].strip() == amendment_ref:
-                    match_row_index = j
-                    break
-
-            # Special case: If the column is "Timestamp", write to "Amendment Timestamp" instead
-            if match_row_index:
-                for col_idx, value in enumerate(row):
-                    if col_idx != profile_id_col and col_idx != update_ref_col:
-                        col_name = headers[col_idx]  # ✅ Define col_name here
-
-                        if col_name == "Timestamp":
-                            amendment_timestamp_col = headers.index("Amendment Timestamp")
-                        
-                            if col_name == "Timestamp":
-                                if value.strip():
-                                    # Parse the timestamp (handles both ISO and DD/MM/YYYY formats)
-                                    try:
-                                        parsed_time = datetime.strptime(value, "%d/%m/%Y %H:%M:%S")
-                                    except ValueError:
-                                        parsed_time = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-                                        print('except')
-
-                                    # Convert to string in DD/MM/YYYY HH:MM:SS
-                                    formatted_time = parsed_time.strftime("%d/%m/%Y %H:%M:%S")
-                                    proc_profile_generator.update_cell(match_row_index, amendment_timestamp_col + 1, str(formatted_time))                
-
-                        if col_name not in ["Timestamp", "Amendment Timestamp", "If updating, add Profile ID (from email)", "Profile ID", "Unique Match Authorisation Code"]:
-                            # Update matching row with values from amendment row (including PDF Path)
-                            proc_profile_generator.update_cell(match_row_index, col_idx + 1, value)
-                            proc_profile_generator.update_cell(match_row_index, posted_col + 1, "No")
-
-                print(f"✅ Updated Profile ID {amendment_ref} from row {i}")
     
-                # Mark amendment row for deletion
-                rows_to_delete.append(i)
-            else:
-                print(
-                    f"⚠️ No matching Profile ID found for amendment row {i}, skipping..."
+    # Map header -> column index (0-based)
+    col_index = {h: i for i, h in enumerate(headers)}
+
+    # Protected columns
+    protected = {
+        proc["Profile ID"],
+        proc["Profile Key"],
+        proc["Timestamp"]
+    }
+
+    for _, amm_row in amm_records.iterrows():
+
+        profile_id = str(amm_row.get(amm["Profile ID"], "")).strip()
+        if not profile_id:
+            continue
+
+        # Find row number in sheet (skip header → start at row 1)
+        row_num = None
+        for i in range(1, len(rows)):
+            if rows[i][col_index[proc["Profile ID"]]] == profile_id:
+                row_num = i + 1   # convert to 1-indexed for gspread
+                row_data = rows[i]
+                break
+
+        if row_num is None:
+            print(f"⚠️ Profile ID {profile_id} not found in processed sheet.")
+            continue
+
+        style = str(amm_row.get(amm["Amendment Style"], "")).strip()
+
+        for col_name in headers:
+            if col_name in protected:
+                continue
+
+            new_value = amm_row.get(col_name, "")
+
+            # Keep existing → only update if new data is non-empty
+            if "Keep existing" in style:
+                if new_value and str(new_value).strip():
+                    proc_profile_generator.update_cell(
+                        row_num,
+                        col_index[col_name] + 1,
+                        str(new_value)
+                    )
+
+            # Replace completely → always update
+            elif "Replace PDF completely" in style:
+                proc_profile_generator.update_cell(
+                    row_num,
+                    col_index[col_name] + 1,
+                    str(new_value)
                 )
 
-    # Delete amendment rows from bottom to top
-    for r in sorted(rows_to_delete, reverse=True):
-        proc_profile_generator.delete_rows(r)
-        print(f"🗑️ Deleted amendment row {r}")
+        # Amendment timestamp update
+        ammend_time_val = amm_row.get(amm["Ammended Timestamp"], "")
+        if ammend_time_val and str(ammend_time_val).strip():
+            proc_profile_generator.update_cell(
+                row_num,
+                col_index[proc["Ammended Timestamp"]] + 1,
+                str(ammend_time_val)
+            )
+
+        print(f"✅ Updated Profile ID {profile_id} ({style})")
 
 
-def generate_umac (existing_umac: set) -> str:
+def generate_profile_key(existing_profile_key: set) -> str:
     """
-    Generate a unique match authorisation code (umac): 7-digit code.
+    Generate a unique match authorisation code (profile_key): 5-digit code.
 
     existing_ids: set of already used match authorisation codes to avoid duplicates
     """
 
     while True:
-        umac = f"{random.randint(0, 9999):07d}"
-        if umac not in existing_umac:
-            return umac
+        profile_key = f"{random.randint(0, 99999):05d}"
+        if profile_key not in existing_profile_key:
+            return profile_key
 
 def generate_unique_id(gender: str, existing_ids: set) -> str:
     """
@@ -185,81 +232,80 @@ if __name__ == "__main__":
     # Generating Profile ID's
     if proc_records.empty:
         existing_ids = []
-        existing_umac = []
+        existing_profile_key = []
     else:
-        existing_ids = proc_records["Profile ID"].to_list()
-        existing_umac = proc_records["Unique Match Authorisation Code"].to_list()
+        existing_ids = proc_records[proc["Profile ID"]].to_list()
+        existing_profile_key = proc_records[proc["Profile Key"]].to_list()
 
-    
 
     for i, row in new_records.iterrows():
-        if (
-            not row["Profile ID"]
-            and not row["If updating, add Profile ID (from email)"]
-        ):
-            gender = row["Gender"]
-            new_id = generate_unique_id(gender, existing_ids)
-            new_records.at[i, "Profile ID"] = new_id
-            existing_ids.append(new_id)
+        new_id = generate_unique_id(row[proc["Gender"]], existing_ids)
+        new_records.at[i, proc["Profile ID"]] = new_id
+        existing_ids.append(new_id)
 
-            new_umac = generate_umac(existing_umac)
-            new_records.at[i, "Unique Match Authorisation Code"] = new_umac
-            existing_umac.append(new_umac)
-            print(f'{row["Profile ID"]}')
+        new_profile_key = generate_profile_key(existing_profile_key)
+        new_records.at[i, proc["Profile Key"]] = new_profile_key
+        existing_profile_key.append(new_profile_key)
+        print(f'{row["Profile ID"]}')
 
-    # Handle new profiles
-    existing_ids = set()
 
-    if not proc_records.empty:
-        existing_ids.update(proc_records["Profile ID"].dropna().tolist())
 
-    # Add IDs from new_records that might already exist
-    existing_ids.update(new_records["Profile ID"].dropna().tolist())
+    # Write new records to processed sheet
+    if not new_records.empty:
+        if proc_records.empty:
+            # Sheet is empty → add headers + data
+            proc_profile_generator.update(
+                [new_records.columns.values.tolist()] + new_records.values.tolist()
+            )
+        else:
+            # Sheet has data → append only values
+            proc_profile_generator.append_rows(new_records.values.tolist())
 
+    # Handle new profiles - create PDFs and send emails
     for i, row in new_records.iterrows():
         data = row.to_dict()
-        user_id = row["Profile ID"]
-        ammended_id = row["If updating, add Profile ID (from email)"]
-        name = row["Full Name (will be kept anonymous)"]
-        pdf_file = create_pdf(data, user_id)
+        profile_id = row[proc["Profile ID"]]
+        name = row[raw['Full Name']]
+        email = row[raw['Email']]
+        pdf_file = create_pdf(data, profile_id)
 
-        # Store PDF path in the DataFrame
-        new_records.at[i, "PDF Path"] = pdf_file
+        if row.get(proc["Profile ID"]):
+            try:
+                intiation_email(email, name, profile_id, pdf_file)
+                print(f"📩 Profile {profile_id}: Sent NEW profile email to {email}")
+            except Exception as e:
+                print(f"Profile {profile_id}: Failed to send email to {email}: {e}")
 
-        update_ref = row.get("If updating, add Profile ID (from email)")
+
+    # Process amendments
+    if not amm_records.empty:
+        process_amendments(amm_records, proc_profile_generator, proc, amm)
+
+    # Handle ammended profiles - create PDFs and send emails
+    for i, row in amm_records.iterrows():
+        data = row.to_dict()
+        profile_id = row[amm["Profile ID"]]
+        name = row[amm['Full Name']]
+        email = row[amm['Email']]
+        pdf_file = create_pdf(data, profile_id)
 
         if (
-            update_ref and update_ref in existing_ids
+            row[amm['Profile ID']] in existing_ids
         ):  # if update_ref exists and the number is part of the existing_ids
             try:
-                ammendment_email(row["Email"], name, ammended_id, pdf_file)
+                ammendment_email(email, name, profile_id, pdf_file)
                 print(
-                    f"📩 Profile {ammended_id}: Sent AMENDMENT email to {data['Email']}"
+                    f"📩 Profile {profile_id}: Sent AMENDMENT email to {email}"
                 )
             except Exception as e:
                 print(
-                    f"Profile {ammended_id}: Failed to send email to {row['Email']}: {e}"
+                    f"Profile {profile_id}: Failed to send email to {email}: {e}"
                 )
-        elif row.get("Profile ID"):
+                
+        elif row[amm['Profile ID']] not in existing_ids:
             try:
-                intiation_email(row["Email"], name, user_id, pdf_file)
-                print(f"📩 Profile {user_id}: Sent NEW profile email to {row['Email']}")
-            except Exception as e:
-                print(f"Profile {user_id}: Failed to send email to {row['Email']}: {e}")
-        elif update_ref not in existing_ids:
-            try:
-                error_email(row["Email"], name, user_id)
+                error_email(email, name, profile_id)
                 print(f"📩 Profile {user_id}: Sent ERROR email to {row['Email']}")
             except Exception as e:
                 print(f"Profile {user_id}: Failed to send email to {row['Email']}: {e}")
 
-    if proc_records.empty:
-        # Sheet is empty → add headers + data
-        proc_profile_generator.update(
-            [new_records.columns.values.tolist()] + new_records.values.tolist()
-        )
-    else:
-        # Sheet has data → append only values
-        proc_profile_generator.append_rows(new_records.values.tolist())
-
-    process_amendments(proc_profile_generator)
