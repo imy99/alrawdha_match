@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime
 import yaml
+import warnings
+
+# Ignore FutureWarning about dtype incompatibility
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 load_dotenv()
 
@@ -107,6 +111,14 @@ new_records.insert(2, proc["Profile ID"], "")
 new_records.insert(3, proc["Profile Key"], "")
 new_records.columns = [col.strip() for col in new_records.columns]
 
+# Rename columns from raw (2a) to proc (3ab) using shared keys
+column_rename_map = {}
+for key in raw.keys():
+    if key in proc:  # If the key exists in both raw and proc configs
+        column_rename_map[raw[key]] = proc[key]
+
+new_records.rename(columns=column_rename_map, inplace=True)
+
 
 # -----------------------------
 # HELPER FUNCTIONS
@@ -124,6 +136,7 @@ def process_amendments(amm_records, proc_profile_generator, proc, amm):
         proc['Profile ID'], proc['Profile Key'], proc['Timestamp'].
 
     Updates are written directly into the sheet.
+    Uses proc and amm config dicts to map between sheet column names.
     """
 
     # Load entire sheet once
@@ -138,50 +151,99 @@ def process_amendments(amm_records, proc_profile_generator, proc, amm):
         proc["Profile ID"],
         proc["Profile Key"],
         proc["Timestamp"]
-    }
+    } 
 
-    for _, amm_row in amm_records.iterrows():
 
-        profile_id = str(amm_row.get(amm["Profile ID"], "")).strip()
+    for idx, amm_row in amm_records.iterrows():
+
+        # Normalize Profile ID and Key: strip whitespace and uppercase
+        profile_id = str(amm_row.get(amm["Profile ID"], "")).strip().upper()
+        profile_key = str(amm_row.get(amm["Profile Key"], "")).lstrip("'").lstrip().strip()
+
+        data = amm_row.to_dict()
+        name = amm_row[amm['Full Name']]
+        email = amm_row[amm['Email']]
+        pdf_file = create_pdf(data, profile_id)
         if not profile_id:
             continue
+
+        # Update the normalized Profile ID and Key back to the dataframe
+        amm_records.at[idx, amm["Profile ID"]] = profile_id
+        amm_records.at[idx, amm["Profile Key"]] = profile_key
 
         # Find row number in sheet (skip header → start at row 1)
         row_num = None
         for i in range(1, len(rows)):
-            if rows[i][col_index[proc["Profile ID"]]] == profile_id:
+            if rows[i][col_index[proc["Profile ID"]]] == profile_id and rows[i][col_index[proc["Profile Key"]]] == profile_key:
                 row_num = i + 1   # convert to 1-indexed for gspread
                 row_data = rows[i]
                 break
 
+        # If profile not found or key mismatch, send error email
         if row_num is None:
-            print(f"⚠️ Profile ID {profile_id} not found in processed sheet.")
+
+            try:
+                print(f"⚠️ Profile ID {profile_id} not found or key mismatch in processed sheet.")
+                error_email(email, name, profile_id)
+                print(f"📩 Profile {profile_id}: Sent ERROR email")
+            except Exception as e:
+                print(f"Profile {profile_id}: Failed to send error email: {e}")
             continue
 
         style = str(amm_row.get(amm["Amendment Style"], "")).strip()
+        print(f"🔍 Processing Profile ID {profile_id} with style: '{style}'")
 
+        updates_made = 0
+        column_name_list = []
         for col_name in headers:
             if col_name in protected:
                 continue
 
-            new_value = amm_row.get(col_name, "")
+            # Find the key in proc config that matches this column name
+            proc_key = None
+            for key, value in proc.items():
+                if value == col_name:
+                    proc_key = key
+                    break
+
+            # Skip if no key found (column not in config)
+            if proc_key is None:
+                print(f"  ⚠️  WARNING: Column '{col_name}' not found in proc config - skipping")
+                continue
+
+            # Get the corresponding amendment sheet column name using the same key
+            amm_col_name = amm.get(proc_key)
+
+            # Replace completely → always update ALL fields (even if empty or not in amm)
+            if "Replace PDF completely" in style:
+                # Get value from amendment sheet, or empty string if no mapping
+                new_value = amm_row.get(amm_col_name, "") if amm_col_name else ""
+
+                column_name_list.append(col_name)
+                proc_profile_generator.update_cell(
+                    row_num,
+                    col_index[col_name] + 1,
+                    str(new_value) if new_value else ""
+                )
+                updates_made += 1
 
             # Keep existing → only update if new data is non-empty
-            if "Keep existing" in style:
+            elif "Keep existing" in style:
+                # Skip if no mapping exists for this key in amm
+                if amm_col_name is None:
+                    continue
+
+                # Get the value from amendment sheet using the mapped column name
+                new_value = amm_row.get(amm_col_name, "")
+
                 if new_value and str(new_value).strip():
+                    column_name_list.append(col_name)
                     proc_profile_generator.update_cell(
                         row_num,
                         col_index[col_name] + 1,
                         str(new_value)
                     )
-
-            # Replace completely → always update
-            elif "Replace PDF completely" in style:
-                proc_profile_generator.update_cell(
-                    row_num,
-                    col_index[col_name] + 1,
-                    str(new_value)
-                )
+                    updates_made += 1
 
         # Amendment timestamp update
         ammend_time_val = amm_row.get(amm["Ammended Timestamp"], "")
@@ -192,7 +254,7 @@ def process_amendments(amm_records, proc_profile_generator, proc, amm):
                 str(ammend_time_val)
             )
 
-        print(f"✅ Updated Profile ID {profile_id} ({style})")
+        print(f"📊 Updated Profile ID {profile_id} with {updates_made} fields: ({column_name_list})")
 
 
 def generate_profile_key(existing_profile_key: set) -> str:
@@ -248,8 +310,6 @@ if __name__ == "__main__":
         existing_profile_key.append(new_profile_key)
         print(f'{row["Profile ID"]}')
 
-
-
     # Write new records to processed sheet
     if not new_records.empty:
         if proc_records.empty:
@@ -265,47 +325,26 @@ if __name__ == "__main__":
     for i, row in new_records.iterrows():
         data = row.to_dict()
         profile_id = row[proc["Profile ID"]]
-        name = row[raw['Full Name']]
-        email = row[raw['Email']]
+        name = row[proc['Full Name']]
+        email = row[proc['Email']]
         pdf_file = create_pdf(data, profile_id)
 
         if row.get(proc["Profile ID"]):
             try:
                 intiation_email(email, name, profile_id, pdf_file)
-                print(f"📩 Profile {profile_id}: Sent NEW profile email to {email}")
+                print(f"📩 Profile {profile_id}: Sent NEW profile email")
             except Exception as e:
-                print(f"Profile {profile_id}: Failed to send email to {email}: {e}")
+                print(f"Profile {profile_id}: Failed to send email")
 
 
     # Process amendments
+    print(f"\n📋 Amendment records found: {len(amm_records)}")
     if not amm_records.empty:
+        print("Starting amendment processing...")
         process_amendments(amm_records, proc_profile_generator, proc, amm)
+    else:
+        print("No amendments to process.")
 
-    # Handle ammended profiles - create PDFs and send emails
-    for i, row in amm_records.iterrows():
-        data = row.to_dict()
-        profile_id = row[amm["Profile ID"]]
-        name = row[amm['Full Name']]
-        email = row[amm['Email']]
-        pdf_file = create_pdf(data, profile_id)
 
-        if (
-            row[amm['Profile ID']] in existing_ids
-        ):  # if update_ref exists and the number is part of the existing_ids
-            try:
-                ammendment_email(email, name, profile_id, pdf_file)
-                print(
-                    f"📩 Profile {profile_id}: Sent AMENDMENT email to {email}"
-                )
-            except Exception as e:
-                print(
-                    f"Profile {profile_id}: Failed to send email to {email}: {e}"
-                )
                 
-        elif row[amm['Profile ID']] not in existing_ids:
-            try:
-                error_email(email, name, profile_id)
-                print(f"📩 Profile {user_id}: Sent ERROR email to {row['Email']}")
-            except Exception as e:
-                print(f"Profile {user_id}: Failed to send email to {row['Email']}: {e}")
 

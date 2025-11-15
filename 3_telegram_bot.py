@@ -6,6 +6,7 @@ import os
 from pdf2image import convert_from_path
 from telegram import Bot
 import asyncio
+from pdf_formation import create_pdf
 
 load_dotenv()
 
@@ -13,6 +14,8 @@ load_dotenv()
 # CONFIGURATION
 # -----------------------------
 SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
+POST_F_PROF = os.getenv("POST_F_PROF")
+POST_M_PROF = os.getenv("POST_M_PROF")
 PROC_PROFILE_GENERATOR = os.getenv("PROC_PROFILE_GENERATOR")
 
 # Telegram Bot Configuration
@@ -29,26 +32,54 @@ scope = [
 creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
 client = gspread.authorize(creds)
 
+print(f"Attempting to open POST_F_PROF: '{POST_F_PROF}'")
+post_f_sheet = client.open(POST_F_PROF).sheet1
+print(f"✅ Successfully opened: {POST_F_PROF}")
+
+print(f"Attempting to open POST_M_PROF: '{POST_M_PROF}'")
+post_m_sheet = client.open(POST_M_PROF).sheet1
+print(f"✅ Successfully opened: {POST_M_PROF}")
+
 print(f"Attempting to open PROC_PROFILE_GENERATOR: '{PROC_PROFILE_GENERATOR}'")
-proc_profile_generator_sheet = client.open(PROC_PROFILE_GENERATOR).sheet1
+proc_sheet = client.open(PROC_PROFILE_GENERATOR).sheet1
 print(f"✅ Successfully opened: {PROC_PROFILE_GENERATOR}")
 
 # -----------------------------
 # GET ALL RECORDS
 # -----------------------------
-proc_records = pd.DataFrame(proc_profile_generator_sheet.get_all_records())
+post_f_records = pd.DataFrame(post_f_sheet.get_all_records())
+post_m_records = pd.DataFrame(post_m_sheet.get_all_records())
+proc_full_records = pd.DataFrame(proc_sheet.get_all_records())
 
-# Check if sheet has the required columns
-if proc_records.empty:
-    print("⚠️ No records found in processed profile generator sheet")
+print(f"📊 Loaded {len(proc_full_records)} profiles from processed sheet")
+
+# Combine both POST sheets
+all_records = []
+sheet_mapping = []  # Track which sheet each record belongs to
+
+if not post_f_records.empty:
+    for idx, row in post_f_records.iterrows():
+        all_records.append(row)
+        sheet_mapping.append(('female', post_f_sheet, idx))
+
+if not post_m_records.empty:
+    for idx, row in post_m_records.iterrows():
+        all_records.append(row)
+        sheet_mapping.append(('male', post_m_sheet, idx))
+
+if not all_records:
+    print("⚠️ No records found in POST_F_PROF or POST_M_PROF sheets")
     exit(0)
 
+proc_records = pd.DataFrame(all_records)
+
+# Check if sheets have the required columns
 if "Posted?" not in proc_records.columns:
-    print("⚠️ 'Posted?' column not found in sheet")
+    print("⚠️ 'Posted?' column not found in sheets")
     exit(1)
 
 if "Confirm?" not in proc_records.columns:
-    print("⚠️ 'Confirm?' column not found in sheet. Please add a 'Confirm?' column to your sheet.")
+    print("⚠️ 'Confirm?' column not found in sheets. Please add a 'Confirm?' column.")
     exit(1)
 
 # -----------------------------
@@ -126,20 +157,18 @@ async def main():
 
     # Filter profiles that need to be posted
     # Condition: Posted? = "No" AND Confirm? = "Yes" (case insensitive)
-    profiles_to_post = proc_records[
+    profiles_to_post_mask = (
         (proc_records["Posted?"].str.strip().str.lower() == "no") &
         (proc_records["Confirm?"].str.strip().str.lower() == "yes")
-    ]
+    )
 
-    if profiles_to_post.empty:
+    if not profiles_to_post_mask.any():
         print("✅ No profiles ready to post (all posted or not confirmed)")
         return
 
-    print(f"\n📋 Found {len(profiles_to_post)} profile(s) ready to post to Telegram\n")
+    profiles_to_post_indices = [i for i, mask in enumerate(profiles_to_post_mask) if mask]
 
-    # Get column index for "Posted?" (1-indexed for gspread)
-    headers = proc_profile_generator_sheet.row_values(1)
-    posted_column_index = headers.index("Posted?") + 1
+    print(f"\n📋 Found {len(profiles_to_post_indices)} profile(s) ready to post to Telegram\n")
 
     posted_count = 0
     failed_count = 0
@@ -147,21 +176,29 @@ async def main():
     # Initialize Telegram bot
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-    for idx, profile in profiles_to_post.iterrows():
+    for record_idx in profiles_to_post_indices:
+        profile = proc_records.iloc[record_idx]
+        gender, sheet, sheet_idx = sheet_mapping[record_idx]
+
         profile_id = profile.get("Profile ID", "Unknown")
-        pdf_path = profile.get("PDF Path", "")
 
-        print(f"📤 Posting Profile ID: {profile_id}")
+        print(f"📤 Posting Profile ID: {profile_id} ({gender})")
 
-        # Check if PDF path exists
-        if not pdf_path or pd.isna(pdf_path):
-            print(f"   ⚠️ No PDF path found for {profile_id}, skipping...")
+        # Get full profile data from processed sheet
+        full_profile = proc_full_records[proc_full_records["Profile ID"] == profile_id]
+
+        if full_profile.empty:
+            print(f"   ⚠️ Profile ID {profile_id} not found in processed sheet, skipping...")
             failed_count += 1
             continue
 
-        # Check if file exists
-        if not os.path.exists(pdf_path):
-            print(f"   ⚠️ PDF file not found: {pdf_path}, skipping...")
+        # Create PDF from full profile data
+        try:
+            data = full_profile.iloc[0].to_dict()
+            pdf_path = create_pdf(data, profile_id)
+            print(f"   ✅ Created PDF: {pdf_path}")
+        except Exception as e:
+            print(f"   ❌ Failed to create PDF: {e}")
             failed_count += 1
             continue
 
@@ -172,10 +209,14 @@ async def main():
             print(f"   ✅ Successfully posted to Telegram as image")
 
             # Mark as posted in Google Sheets
-            # Calculate sheet row number (DataFrame index + 2: +1 for 0-index, +1 for header)
-            sheet_row = idx + 2
+            # Get column index for "Posted?" from the correct sheet
+            headers = sheet.row_values(1)
+            posted_column_index = headers.index("Posted?") + 1
 
-            if mark_as_posted(proc_profile_generator_sheet, sheet_row, posted_column_index):
+            # Calculate sheet row number (DataFrame index + 2: +1 for 0-index, +1 for header)
+            sheet_row = sheet_idx + 2
+
+            if mark_as_posted(sheet, sheet_row, posted_column_index):
                 print(f"   ✅ Marked as posted in Google Sheets")
                 posted_count += 1
             else:
@@ -189,7 +230,7 @@ async def main():
     print(f"📊 SUMMARY:")
     print(f"   ✅ Successfully posted: {posted_count}")
     print(f"   ❌ Failed: {failed_count}")
-    print(f"   📝 Total processed: {len(profiles_to_post)}")
+    print(f"   📝 Total processed: {len(profiles_to_post_indices)}")
     print(f"{'='*50}\n")
 
 

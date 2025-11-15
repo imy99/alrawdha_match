@@ -9,3 +9,4 @@ black
 python-telegram-bot
 pdf2image
 pillow
+google-api-python-client
