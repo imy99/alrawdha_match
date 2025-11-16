@@ -15,7 +15,6 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 
 load_dotenv()
 
-lla
 # Load config.yaml
 with open("category_names.yaml", "r") as file:
     config = yaml.safe_load(file)
