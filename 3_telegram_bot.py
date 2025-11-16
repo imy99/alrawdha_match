@@ -13,7 +13,7 @@ load_dotenv()
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
+SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_JSON")
 POST_F_PROF = os.getenv("POST_F_PROF")
 POST_M_PROF = os.getenv("POST_M_PROF")
 PROC_PROFILE_GENERATOR = os.getenv("PROC_PROFILE_GENERATOR")

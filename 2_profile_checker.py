@@ -18,7 +18,7 @@ proc = config['3ab']
 # CONFIGURATION
 # -----------------------------
 # Path to your service account JSON key
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
+SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_JSON")
 
 # Google Sheet names
 PROC_PROFILE_GENERATOR = os.getenv("PROC_PROFILE_GENERATOR")
