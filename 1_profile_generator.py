@@ -345,13 +345,14 @@ if __name__ == "__main__":
     for i, row in new_records.iterrows():
         data = row.to_dict()
         profile_id = row[proc["Profile ID"]]
+        profile_key = row[proc["Profile Key"]]
         name = row[proc['Full Name']]
         email = row[proc['Email']]
         pdf_file = create_pdf(data, profile_id)
 
-        if row.get(proc["Profile ID"]):
+        if row.get(proc["Profile ID"]) and row.get(proc["Profile Key"]):
             try:
-                intiation_email(email, name, profile_id, pdf_file)
+                intiation_email(email, name, profile_id, profile_key, pdf_file)
                 print(f"📩 Profile {profile_id}: Sent NEW profile email")
             except Exception as e:
                 print(f"Profile {profile_id}: Failed to send email")
