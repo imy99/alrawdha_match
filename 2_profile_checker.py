@@ -18,7 +18,7 @@ proc = config['3ab']
 # CONFIGURATION
 # -----------------------------
 # Path to your service account JSON key
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_JSON")
+SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
 # Google Sheet names
 PROC_PROFILE_GENERATOR = os.getenv("PROC_PROFILE_GENERATOR")
@@ -32,7 +32,7 @@ scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive",
 ]
-creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_JSON, scope)
 client = gspread.authorize(creds)
 
 proc_profile_generator = client.open(PROC_PROFILE_GENERATOR).sheet1

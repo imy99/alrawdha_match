@@ -13,7 +13,7 @@ load_dotenv()
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_JSON")
+SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 POST_F_PROF = os.getenv("POST_F_PROF")
 POST_M_PROF = os.getenv("POST_M_PROF")
 PROC_PROFILE_GENERATOR = os.getenv("PROC_PROFILE_GENERATOR")
@@ -29,7 +29,7 @@ scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive",
 ]
-creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_JSON, scope)
 client = gspread.authorize(creds)
 
 print(f"Attempting to open POST_F_PROF: '{POST_F_PROF}'")

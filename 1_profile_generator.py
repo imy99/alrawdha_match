@@ -15,7 +15,7 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 
 load_dotenv()
 
-
+lla
 # Load config.yaml
 with open("category_names.yaml", "r") as file:
     config = yaml.safe_load(file)
@@ -34,7 +34,7 @@ proc = config ['3ab']
 # CONFIGURATION
 # -----------------------------
 # Path to your service account JSON key
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_JSON")
+SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
 # Google Sheet name (linked to your Form responses)
 RAW_PROFILE_GENERATOR = os.getenv("RAW_PROFILE_GENERATOR")
@@ -53,7 +53,7 @@ scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive",
 ]
-creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_JSON, scope)
 client = gspread.authorize(creds)
 raw_profile_generator = client.open(RAW_PROFILE_GENERATOR).sheet1
 amm_profile_generator = client.open(AMMENDED_PROFILE_GENERATOR).sheet1
