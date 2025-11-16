@@ -141,7 +141,7 @@ async def send_pdf_as_image(bot, chat_id, pdf_path, profile_id):
 def mark_as_posted(sheet, row_number, posted_column_index):
     """Mark a profile as posted in Google Sheets"""
     try:
-        sheet.update_cell(row_number, posted_column_index, "yes")
+        sheet.update_cell(row_number, posted_column_index, "Yes")
         return True
     except Exception as e:
         print(f"❌ Failed to mark row {row_number} as posted: {e}")

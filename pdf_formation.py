@@ -359,7 +359,6 @@ def create_pdf(data, user_id):
 # -----------------------------
 if __name__ == "__main__":
     testing = pd.read_csv('testing.csv')
-    testing = pd.read_csv('female_testing.csv')
     for i, row in testing.iterrows():
         try:
             user_id = row['Profile ID']

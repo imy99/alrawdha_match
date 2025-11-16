@@ -151,10 +151,19 @@ def process_amendments(amm_records, proc_profile_generator, proc, amm):
         proc["Profile ID"],
         proc["Profile Key"],
         proc["Timestamp"]
-    } 
+    }
 
+    # Get amendment sheet headers and ensure "Amendment Status" column exists
+    amm_headers = amm_profile_generator.row_values(1)
+    if "Amendment Status" not in amm_headers:
+        # Add new column header
+        amm_headers.append("Amendment Status")
+        amm_profile_generator.update([amm_headers], range_name='1:1')
+    amm_status_col = amm_headers.index("Amendment Status") + 1  # 1-indexed for gspread
 
     for idx, amm_row in amm_records.iterrows():
+        # Calculate amendment sheet row number (idx + 2 because: +1 for header, +1 for 0-based to 1-based)
+        amm_sheet_row = idx + 2
 
         # Normalize Profile ID and Key: strip whitespace and uppercase
         profile_id = str(amm_row.get(amm["Profile ID"], "")).strip().upper()
@@ -181,10 +190,12 @@ def process_amendments(amm_records, proc_profile_generator, proc, amm):
 
         # If profile not found or key mismatch, send error email
         if row_num is None:
+            # Mark as Failed in amendment sheet
+            amm_profile_generator.update_cell(amm_sheet_row, amm_status_col, "Failed")
 
             try:
                 print(f"⚠️ Profile ID {profile_id} not found or key mismatch in processed sheet.")
-                error_email(email, name, profile_id)
+                error_email(email, name, profile_id, profile_key)
                 print(f"📩 Profile {profile_id}: Sent ERROR email")
             except Exception as e:
                 print(f"Profile {profile_id}: Failed to send error email: {e}")
@@ -255,6 +266,16 @@ def process_amendments(amm_records, proc_profile_generator, proc, amm):
             )
 
         print(f"📊 Updated Profile ID {profile_id} with {updates_made} fields: ({column_name_list})")
+
+        # Mark as Complete in amendment sheet and send email
+        amm_profile_generator.update_cell(amm_sheet_row, amm_status_col, "Complete")
+
+        try:
+            ammendment_email(email, name, profile_id, profile_key, pdf_file)
+            print(f"📩 Profile {profile_id}: Sent AMENDMENT email to {email}")
+        except Exception as e:
+            print(f"Profile {profile_id}: Failed to send amendment email: {e}")
+
 
 
 def generate_profile_key(existing_profile_key: set) -> str:
@@ -338,6 +359,7 @@ if __name__ == "__main__":
 
 
     # Process amendments
+    amm_records = amm_records[amm_records[amm['Amendment Status']].isnull()]
     print(f"\n📋 Amendment records found: {len(amm_records)}")
     if not amm_records.empty:
         print("Starting amendment processing...")
