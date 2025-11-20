@@ -24,7 +24,7 @@ HIGHLIGHT_CREAM = (248, 246, 240)  # #F8F6F0 - Cream
 FEMALE_PINK = (241, 98, 123)      # Rose Pink #E91E63
 MALE_BLUE = (2, 119, 189)        # Ocean Blue #0277BD
 
-def create_gender_buttons(values_str, pdf, gender):
+def create_gender_buttons(values_str, pdf, gender, button_font_size=10):
     """Create gender-colored buttons for 'Open to matches from' field."""
     if not values_str or pd.isna(values_str):
         return
@@ -35,11 +35,12 @@ def create_gender_buttons(values_str, pdf, gender):
     # Determine button color based on gender
     button_color = FEMALE_PINK if gender.lower() == 'female' else MALE_BLUE
 
-    # Calculate total width needed for all buttons
+    # Calculate total width needed for all buttons (scaled with font size)
     total_width = 0
     button_widths = []
+    char_width = button_font_size * 0.22  # Proportional character width
     for value in values:
-        tag_width = len(value) * 2.2 + 10  # Increased width for 10pt font
+        tag_width = len(value) * char_width + 10
         button_widths.append(tag_width)
         total_width += tag_width + 3  # Add spacing
     total_width -= 3  # Remove last spacing
@@ -51,6 +52,9 @@ def create_gender_buttons(values_str, pdf, gender):
     x_position = start_x
     y_position = start_y
 
+    # Button height scaled with font size
+    button_height = button_font_size * 0.7
+
     for i, value in enumerate(values):
         tag_width = button_widths[i]
 
@@ -60,24 +64,25 @@ def create_gender_buttons(values_str, pdf, gender):
         # Draw shadow (slightly offset and darker)
         pdf.set_fill_color(*shadow_color)
         pdf.set_line_width(0)
-        pdf.rect(x_position + 0.5, y_position + 0.5, tag_width, 7, 'F', round_corners=True, corner_radius=1.5)
+        pdf.rect(x_position + 0.5, y_position + 0.5, tag_width, button_height, 'F', round_corners=True, corner_radius=1.5)
 
         # Draw rounded rectangle for button
         pdf.set_fill_color(*button_color)
         pdf.set_draw_color(*button_color)
         pdf.set_line_width(0.3)
-        pdf.rect(x_position, y_position, tag_width, 7, 'DF', round_corners=True, corner_radius=1.5)
+        pdf.rect(x_position, y_position, tag_width, button_height, 'DF', round_corners=True, corner_radius=1.5)
 
         # Draw button text
-        pdf.set_font("helvetica", "B", 10)
+        pdf.set_font("helvetica", "B", button_font_size)
         pdf.set_text_color(255, 255, 255)  # White text
-        pdf.set_xy(x_position + 2, y_position + 1.5)
-        pdf.cell(tag_width - 4, 4, value, align="C")
+        text_y_offset = (button_height - button_font_size * 0.4) / 2
+        pdf.set_xy(x_position + 2, y_position + text_y_offset)
+        pdf.cell(tag_width - 4, button_font_size * 0.4, value, align="C")
 
         x_position += tag_width + 3
 
     # Move cursor after buttons
-    pdf.set_xy(20, y_position + 10)
+    pdf.set_xy(20, y_position + button_height + 3)
 
 def calculate_content_length(data):
     """Calculate total content length to determine appropriate font size."""
@@ -153,18 +158,54 @@ def upload_to_drive(file_path, file_name):
 
 def create_pdf(data, user_id):
     """Create a single-page Al Rawdha Matrimony PDF profile with gender-based header."""
-    pdf = FPDF()
-    pdf.add_page()
-
     # Determine gender for header/text/button colors
     gender = data.get('Gender', 'Male')
     gender_color = FEMALE_PINK if str(gender).lower() == 'female' else MALE_BLUE
 
-    # Set minimum font size to 10 points
+    # Initial font sizes - will be reduced if content doesn't fit
     title_font = 12
     content_font = 10
-    line_height = 4.5
-    spacing = 2.5
+    min_font_size = 6  # Minimum readable font size
+
+    # Try generating PDF, reducing font sizes if content doesn't fit on one page
+    while True:
+        pdf = FPDF()
+        pdf.add_page()
+
+        line_height = content_font * 0.45  # Proportional to content font
+        spacing = content_font * 0.25  # Proportional to content font
+
+        fits_on_one_page = _render_pdf_content(pdf, data, user_id, gender, gender_color, title_font, content_font, line_height, spacing)
+
+        if fits_on_one_page:
+            break
+
+        # If we've hit minimum font size and still doesn't fit, give up
+        if content_font <= min_font_size:
+            print(f"WARNING: Content for {user_id} cannot fit on one page even at minimum font size ({min_font_size}pt)")
+            print(f"         Using minimum font size and accepting multi-page PDF.")
+            break
+
+        # Reduce font sizes and try again
+        title_font = max(min_font_size, title_font - 1)
+        content_font = max(min_font_size, content_font - 1)
+        print(f"Content overflow detected for {user_id}. Reducing font size to {content_font}pt...")
+
+    # Save PDF
+    filename = f'data/{user_id}_{datetime.now().strftime("%d_%m_%y")}.pdf'
+
+    # Create data directory if it doesn't exist
+    os.makedirs('data', exist_ok=True)
+
+    pdf.output(filename)
+
+    return filename
+
+def _render_pdf_content(pdf, data, user_id, gender, gender_color, title_font, content_font, line_height, spacing):
+    """Render PDF content and return True if it fits on one page."""
+
+    # Enable auto page break to detect overflow
+    pdf.set_auto_page_break(True, margin=15)
 
     # Header Section with gender-specific background
     pdf.set_fill_color(*gender_color)
@@ -189,6 +230,11 @@ def create_pdf(data, user_id):
     y_position = 48
     left_margin = 20
     content_width = 170
+
+    # Footer space reserved at bottom (logo needs 30mm above footer, footer is 15mm)
+    footer_start = 297 - 15  # 282mm
+    logo_space = 30
+    max_content_y = footer_start - logo_space - 5  # 247mm with 5mm buffer
 
     # Section 1: Personal Details (Age, Marriage Status, Children, Height as buttons - directly below header, no subtitle)
     personal_details = []
@@ -217,7 +263,7 @@ def create_pdf(data, user_id):
 
     if personal_details:
         pdf.set_xy(left_margin, y_position)
-        create_gender_buttons(', '.join(personal_details), pdf, gender)
+        create_gender_buttons(', '.join(personal_details), pdf, gender, content_font)
         y_position = pdf.get_y() + spacing
 
     # Helper function to add centered section
@@ -235,7 +281,7 @@ def create_pdf(data, user_id):
         if is_buttons:
             # For button content, center the buttons
             pdf.set_xy(left_margin, y_position)
-            create_gender_buttons(content_text, pdf, gender)
+            create_gender_buttons(content_text, pdf, gender, content_font)
             y_position = pdf.get_y() + spacing
         else:
             pdf.set_xy(left_margin, y_position)
@@ -307,8 +353,19 @@ def create_pdf(data, user_id):
             pdf.cell(content_width, 5, "Open To ...", align="C")
             y_position += 5 + spacing
             pdf.set_xy(left_margin, y_position)
-            create_gender_buttons(open_to_str, pdf, gender)
+            create_gender_buttons(open_to_str, pdf, gender, content_font)
             y_position = pdf.get_y() + spacing
+
+    # Check if content fits on one page - use actual page count
+    page_count = pdf.page_no()
+    content_fits = page_count == 1
+
+    # Debug output
+    print(f"  → Page count: {page_count}, Content Y: {y_position:.1f}mm", end="")
+    if not content_fits:
+        print(" (OVERFLOW - MULTIPLE PAGES!)")
+    else:
+        print(f" (fits on 1 page)")
 
     # Footer with representative contact (green color, larger font) - fixed at bottom of page 1
     if "Representative's Number" in data and pd.notna(data["Representative's Number"]):
@@ -316,10 +373,6 @@ def create_pdf(data, user_id):
 
         # Disable auto page break temporarily
         pdf.set_auto_page_break(False)
-
-        # Go to page 1 if we're on a different page
-        if pdf.page_no() > 1:
-            pdf.set_page(1)
 
         # Draw green footer background at bottom of page 1
         pdf.set_fill_color(*PRIMARY_GREEN)
@@ -336,29 +389,22 @@ def create_pdf(data, user_id):
             except Exception as e:
                 print(f"Warning: Could not add logo - {e}")
 
-        # Add contact text in white - minimum 10 points
+        # Add contact text in white - scaled with content font
         pdf.set_xy(5, footer_y + 4)
-        pdf.set_font("helvetica", "B", 10)
+        footer_font_size = max(8, min(10, content_font))  # Scale footer font but keep between 8-10pt
+        pdf.set_font("helvetica", "B", footer_font_size)
         pdf.set_text_color(255, 255, 255)  # White text
         contact_text = f"Interested? Contact representative: {rep_number}"
         contact_encoded = contact_text.encode("latin-1", "replace").decode("latin-1")
         pdf.cell(200, 7, contact_encoded, align="C")
 
-    # Save PDF
-    filename = f'data/{user_id}_{datetime.now().strftime("%d_%m_%y")}.pdf'
-
-    # Create data directory if it doesn't exist
-    os.makedirs('data', exist_ok=True)
-
-    pdf.output(filename)
-
-    return filename
+    return content_fits
 
 # -----------------------------
 # TESTING WORKFLOW
 # -----------------------------
 if __name__ == "__main__":
-    testing = pd.read_csv('testing.csv')
+    testing = pd.read_csv('text_overflow.csv')
     for i, row in testing.iterrows():
         try:
             user_id = row['Profile ID']
