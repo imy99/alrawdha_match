@@ -86,7 +86,7 @@ if "Confirm?" not in proc_records.columns:
 # HELPER FUNCTIONS
 # -----------------------------
 
-async def send_pdf_as_image(bot, chat_id, pdf_path, profile_id, representative_number, gender):
+async def send_pdf_as_image(bot, chat_id, pdf_path, profile_id):
     """
     Convert PDF to image and send as photo to Telegram channel
 
@@ -95,8 +95,6 @@ async def send_pdf_as_image(bot, chat_id, pdf_path, profile_id, representative_n
         chat_id: Telegram channel/chat ID
         pdf_path: Path to PDF file
         profile_id: Profile ID for caption
-        representative_number: Representative contact number
-        gender: Gender of the profile (Male/Female)
 
     Returns:
         tuple: (success: bool, message: str)
@@ -115,18 +113,10 @@ async def send_pdf_as_image(bot, chat_id, pdf_path, profile_id, representative_n
         temp_image_path = pdf_path.replace('.pdf', '_temp.jpg')
         image.save(temp_image_path, 'JPEG', quality=95)
 
-        # Create gender-specific caption
-        if str(gender).lower() == 'female':
-            gender_text = "this sister"
-            pronoun = "her"
-        else:
-            gender_text = "this brother"
-            pronoun = "his"
-
+        # Create caption
         caption = f"""
-<b>Al Rawdha Matrimonial Profile</b>
+🌙 <b>Al Rawdha Matrimonial Profile</b>
 <b>Profile ID:</b> {profile_id}
-<b>If interested in {gender_text} contact {pronoun} representative:</b> {representative_number}
 <i>May Allah guide you to the right match 💚</i>
         """.strip()
 
@@ -191,7 +181,6 @@ async def main():
         gender, sheet, sheet_idx = sheet_mapping[record_idx]
 
         profile_id = profile.get("Profile ID", "Unknown")
-        representative_number = profile.get("Representative's Number", "Unknown")
 
         print(f"📤 Posting Profile ID: {profile_id} ({gender})")
 
@@ -214,8 +203,7 @@ async def main():
             continue
 
         # Send to Telegram as image
-        gender = data.get('Gender', '')
-        success, message = await send_pdf_as_image(bot, TELEGRAM_CHANNEL_ID, pdf_path, profile_id, representative_number, gender)
+        success, message = await send_pdf_as_image(bot, TELEGRAM_CHANNEL_ID, pdf_path, profile_id)
 
         if success:
             print(f"   ✅ Successfully posted to Telegram as image")
