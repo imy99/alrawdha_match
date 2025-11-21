@@ -117,16 +117,13 @@ async def send_pdf_as_image(bot, chat_id, pdf_path, profile_id, representative_n
 
         # Create gender-specific caption
         if str(gender).lower() == 'female':
-            gender_text = "this sister"
             pronoun = "her"
         else:
-            gender_text = "this brother"
             pronoun = "his"
 
         caption = f"""
-<b>Al Rawdha Matrimonial Profile</b>
-<b>Profile ID:</b> {profile_id}
-<b>If interested in {gender_text} contact {pronoun} representative:</b> {representative_number}
+<b>🌙 Al Rawdha Matrimonial Profile {profile_id} ✨</b>
+Contact {pronoun} representative if interested on 📞 <b>{representative_number}</b>
 <i>May Allah guide you to the right match 💚</i>
         """.strip()
 

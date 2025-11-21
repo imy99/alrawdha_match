@@ -3,7 +3,7 @@ oauth2client
 fpdf2
 yagmail
 pandas
-dotenv
+python-dotenv
 flake8
 black
 python-telegram-bot

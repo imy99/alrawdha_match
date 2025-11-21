@@ -79,7 +79,10 @@ if __name__ == "__main__":
         proc["Full Name"],
         proc["Gender"],
         proc["Email"],
-        proc["Phone Number"]
+        proc["Phone Number"],
+        proc["Representative Full Name"],
+        proc["Representative Number"],
+        proc["Representative Email"]
     ]
 
     # Filter only the columns we need
