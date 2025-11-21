@@ -288,9 +288,7 @@ def _render_pdf_content(pdf, data, user_id, gender, gender_color, title_font, co
             pdf.set_font("helvetica", "", content_font)
             pdf.set_text_color(0, 0, 0)  # Black text for content
 
-            # Encode for Latin-1 compatibility
-            content_encoded = str(content_text).encode("latin-1", "replace").decode("latin-1")
-            pdf.multi_cell(content_width, line_height, content_encoded, align="C")
+            pdf.multi_cell(content_width, line_height, str(content_text), align="C")
             y_position = pdf.get_y() + spacing
 
     # Section 2: Ethnicity and Residence
@@ -395,8 +393,7 @@ def _render_pdf_content(pdf, data, user_id, gender, gender_color, title_font, co
         pdf.set_font("helvetica", "B", footer_font_size)
         pdf.set_text_color(255, 255, 255)  # White text
         contact_text = f"Interested? Contact representative: {rep_number}"
-        contact_encoded = contact_text.encode("latin-1", "replace").decode("latin-1")
-        pdf.cell(200, 7, contact_encoded, align="C")
+        pdf.cell(200, 7, contact_text, align="C")
 
     return content_fits
 
