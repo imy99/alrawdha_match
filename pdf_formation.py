@@ -73,7 +73,7 @@ def create_gender_buttons(values_str, pdf, gender, button_font_size=10):
         pdf.rect(x_position, y_position, tag_width, button_height, 'DF', round_corners=True, corner_radius=1.5)
 
         # Draw button text
-        pdf.set_font("DejaVu", "B", button_font_size)
+        pdf.set_font("helvetica", "B", button_font_size)
         pdf.set_text_color(255, 255, 255)  # White text
         text_y_offset = (button_height - button_font_size * 0.4) / 2
         pdf.set_xy(x_position + 2, y_position + text_y_offset)
@@ -212,13 +212,13 @@ def _render_pdf_content(pdf, data, user_id, gender, gender_color, title_font, co
     pdf.rect(0, 0, 210, 40, 'F')
 
     # Title: Al Rawdha Matrimony (centered)
-    pdf.set_font("DejaVu", "B", 20)
+    pdf.set_font("helvetica", "B", 20)
     pdf.set_text_color(255, 255, 255)  # White text
     pdf.set_xy(0, 12)
     pdf.cell(210, 8, "Al Rawdha Matrimony", align="C")
 
     # Subheading: Profile ID (centered)
-    pdf.set_font("DejaVu", "B", 14)
+    pdf.set_font("helvetica", "B", 14)
     pdf.set_text_color(255, 255, 255)
     pdf.set_xy(0, 24)
     pdf.cell(210, 6, f"Profile ID: {user_id}", align="C")
@@ -272,7 +272,7 @@ def _render_pdf_content(pdf, data, user_id, gender, gender_color, title_font, co
 
         # Section title (centered, bold) - use gender color
         pdf.set_xy(left_margin, y_position)
-        pdf.set_font("DejaVu", "B", title_font)
+        pdf.set_font("helvetica", "B", title_font)
         pdf.set_text_color(*gender_color)
         pdf.cell(content_width, 5, title, align="C")
         y_position += 5 + spacing
@@ -285,7 +285,7 @@ def _render_pdf_content(pdf, data, user_id, gender, gender_color, title_font, co
             y_position = pdf.get_y() + spacing
         else:
             pdf.set_xy(left_margin, y_position)
-            pdf.set_font("DejaVu", "", content_font)
+            pdf.set_font("helvetica", "", content_font)
             pdf.set_text_color(0, 0, 0)  # Black text for content
 
             pdf.multi_cell(content_width, line_height, str(content_text), align="C")
@@ -346,7 +346,7 @@ def _render_pdf_content(pdf, data, user_id, gender, gender_color, title_font, co
 
         if any(keyword in open_to_lower for keyword in keywords):
             pdf.set_xy(left_margin, y_position)
-            pdf.set_font("DejaVu", "B", title_font)
+            pdf.set_font("helvetica", "B", title_font)
             pdf.set_text_color(*gender_color)
             pdf.cell(content_width, 5, "Open To ...", align="C")
             y_position += 5 + spacing
@@ -390,7 +390,7 @@ def _render_pdf_content(pdf, data, user_id, gender, gender_color, title_font, co
         # Add contact text in white - scaled with content font
         pdf.set_xy(5, footer_y + 4)
         footer_font_size = max(8, min(10, content_font))  # Scale footer font but keep between 8-10pt
-        pdf.set_font("DejaVu", "B", footer_font_size)
+        pdf.set_font("helvetica", "B", footer_font_size)
         pdf.set_text_color(255, 255, 255)  # White text
         contact_text = f"Interested? Contact representative: {rep_number}"
         pdf.cell(200, 7, contact_text, align="C")
