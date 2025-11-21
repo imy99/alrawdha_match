@@ -123,7 +123,7 @@ async def send_pdf_as_image(bot, chat_id, pdf_path, profile_id, representative_n
 
         caption = f"""
 <b>🌙 Al Rawdha Matrimonial Profile {profile_id} ✨</b>
-Contact {pronoun} representative if interested on 📞 <b>{representative_number}</b>
+If interested, contact {pronoun} representative at 💬 <b>{representative_number}</b>
 <i>May Allah guide you to the right match 💚</i>
         """.strip()
 
