@@ -170,6 +170,8 @@ def create_pdf(data, user_id):
     # Try generating PDF, reducing font sizes if content doesn't fit on one page
     while True:
         pdf = FPDF()
+        pdf.add_font('DejaVu', '', 'DejaVuSans.ttf')
+        pdf.add_font('DejaVu', 'B', 'DejaVuSans-Bold.ttf')
         pdf.add_page()
 
         line_height = content_font * 0.45  # Proportional to content font
